@@ -17,11 +17,13 @@ void Camera::reset()
     yaw_ = -90.0f;
     pitch_ = -15.0f;
     fieldOfView_ = 45.0f;
+    firstMouse_ = true;
 }
 
 void Camera::update(GLFWwindow*, float deltaTime)
 {
     const float speed = 5.0f * deltaTime;
+
     const float yawRadians = yaw_ * Pi / 180.0f;
     const float forwardX = std::cos(yawRadians);
     const float forwardZ = std::sin(yawRadians);
@@ -72,9 +74,46 @@ void Camera::update(GLFWwindow*, float deltaTime)
         pitch_ -= 60.0f * deltaTime;
     }
 
+    if (pitch_ > 89.0f)
+    {
+        pitch_ = 89.0f;
+    }
+    if (pitch_ < -89.0f)
+    {
+        pitch_ = -89.0f;
+    }
+
     if (Input::wasPressed(GLFW_KEY_R))
     {
         reset();
+    }
+}
+
+void Camera::onMouseMove(double xPosition, double yPosition)
+{
+    if (firstMouse_)
+    {
+        lastMouseX_ = xPosition;
+        lastMouseY_ = yPosition;
+        firstMouse_ = false;
+        return;
+    }
+
+    const float sensitivity = 0.10f;
+    const float xOffset = static_cast<float>(xPosition - lastMouseX_) * sensitivity;
+    const float yOffset = static_cast<float>(lastMouseY_ - yPosition) * sensitivity;
+    lastMouseX_ = xPosition;
+    lastMouseY_ = yPosition;
+
+    yaw_ += xOffset;
+    pitch_ += yOffset;
+    if (pitch_ > 89.0f)
+    {
+        pitch_ = 89.0f;
+    }
+    if (pitch_ < -89.0f)
+    {
+        pitch_ = -89.0f;
     }
 }
 
@@ -93,19 +132,9 @@ void Camera::applyProjection(int width, int height) const
 
 void Camera::applyView() const
 {
-    const float yawRadians = yaw_ * Pi / 180.0f;
-    const float pitchRadians = pitch_ * Pi / 180.0f;
-    const float directionX = std::cos(pitchRadians) * std::cos(yawRadians);
-    const float directionY = std::sin(pitchRadians);
-    const float directionZ = std::cos(pitchRadians) * std::sin(yawRadians);
-
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glRotatef(-pitch_, 1.0f, 0.0f, 0.0f);
     glRotatef(-yaw_ - 90.0f, 0.0f, 1.0f, 0.0f);
     glTranslatef(-position_[0], -position_[1], -position_[2]);
-
-    (void)directionX;
-    (void)directionY;
-    (void)directionZ;
 }

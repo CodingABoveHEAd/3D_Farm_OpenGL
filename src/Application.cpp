@@ -3,6 +3,7 @@
 #include "Input.h"
 
 #include <GLFW/glfw3.h>
+#include <algorithm>
 #include <iostream>
 
 bool Application::initialize(int width, int height, const char* title)
@@ -12,6 +13,9 @@ bool Application::initialize(int width, int height, const char* title)
         std::cerr << "Failed to initialize GLFW.\n";
         return false;
     }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 
     window_ = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!window_)
@@ -24,10 +28,10 @@ bool Application::initialize(int width, int height, const char* title)
     glfwMakeContextCurrent(window_);
     glfwSetWindowUserPointer(window_, this);
     glfwSetFramebufferSizeCallback(window_, framebufferSizeCallback);
+    glfwSetCursorPosCallback(window_, cursorPositionCallback);
+    glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glClearColor(0.52f, 0.80f, 0.98f, 1.0f);
 
     int framebufferWidth = 0;
@@ -46,7 +50,7 @@ void Application::run()
     while (!glfwWindowShouldClose(window_))
     {
         const double currentTime = glfwGetTime();
-        const float deltaTime = static_cast<float>(currentTime - previousTime_);
+        const float deltaTime = std::min(static_cast<float>(currentTime - previousTime_), 0.1f);
         previousTime_ = currentTime;
 
         Input::update(window_);
@@ -85,16 +89,18 @@ void Application::framebufferSizeCallback(GLFWwindow* window, int width, int hei
     }
 }
 
+void Application::cursorPositionCallback(GLFWwindow* window, double xPosition, double yPosition)
+{
+    auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
+    if (application)
+    {
+        application->camera_.onMouseMove(xPosition, yPosition);
+    }
+}
+
 void Application::renderFrame(float)
 {
-    if (scene_.isNight())
-    {
-        glClearColor(0.03f, 0.06f, 0.16f, 1.0f);
-    }
-    else
-    {
-        glClearColor(0.52f, 0.80f, 0.98f, 1.0f);
-    }
+    glDisable(GL_LIGHTING);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     camera_.applyView();
     scene_.render();

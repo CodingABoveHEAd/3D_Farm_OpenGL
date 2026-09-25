@@ -13,6 +13,7 @@ public:
 
 private:
     static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
+    static void cursorPositionCallback(GLFWwindow* window, double xPosition, double yPosition);
     void renderFrame(float deltaTime);
 
     GLFWwindow* window_ = nullptr;
