@@ -34,7 +34,8 @@ $sourceFiles = @(
     "src\Lighting.cpp",
     "src\graphics\Primitives.cpp",
     "src\objects\Farmhouse.cpp",
-    "src\objects\Vegetation.cpp"
+    "src\objects\Vegetation.cpp",
+    "src\objects\Tractor.cpp"
 ) | ForEach-Object { Join-Path $projectRoot $_ }
 
 & $compiler `

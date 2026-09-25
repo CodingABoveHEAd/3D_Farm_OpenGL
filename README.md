@@ -18,6 +18,7 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - Phase 3 low-polygon farmhouse built from OpenGL primitives
 - Phase 4 reusable trees and repeated crop instances
 - Phase 5 entrance gate, farmhouse pathway, and simple environmental rocks
+- Phase 6 low-polygon manually controlled tractor
 
 ## Phase 2 Environment
 
@@ -42,6 +43,10 @@ Vegetation is implemented in [Vegetation.cpp](src/objects/Vegetation.cpp). `draw
 
 The existing perimeter fence now has an entrance opening on the front side at approximately `x = 10`. Two gate panels use translated, scaled, and rotated fence rails. A simple brown pathway begins at the gate and leads toward the farmhouse, while four small cube-based rocks add environmental detail without introducing textures or external models.
 
+## Phase 6 Tractor
+
+The tractor is implemented in [Tractor.cpp](src/objects/Tractor.cpp). Its complete model is drawn under one root translation stored in `position_[3]`. The body, engine, cabin, roof, axles, wheels, and exhaust use local transforms relative to that root. Manual movement uses `I`, `J`, `K`, and `L`; wheel rotation changes only while the tractor is being moved.
+
 ## Controls
 
 - `W`, `A`, `S`, `D`: move the camera
@@ -49,6 +54,8 @@ The existing perimeter fence now has an entrance opening on the front side at ap
 - Mouse: rotate the camera
 - Arrow keys: rotate the camera as an alternative
 - `R`: reset the camera
+- `I`, `K`: move tractor forward/backward
+- `J`, `L`: move tractor left/right
 - `Esc`: exit
 
 The mouse cursor is captured while the application is running. Press `Esc` to close the window and release the cursor.

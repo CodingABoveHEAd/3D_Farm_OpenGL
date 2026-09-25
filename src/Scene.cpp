@@ -30,6 +30,7 @@ void Scene::handleInput()
 void Scene::update(float deltaTime)
 {
     animation_.update(deltaTime);
+    tractor_.update(deltaTime);
 }
 
 void Scene::render() const
@@ -41,6 +42,7 @@ void Scene::render() const
     renderPath();
     renderBoundary();
     farmhouse_.render();
+    tractor_.drawTractor();
     renderRocks();
     renderTransformationMarker();
 }

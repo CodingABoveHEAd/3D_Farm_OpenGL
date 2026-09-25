@@ -3,6 +3,7 @@
 #include "Animation.h"
 #include "Lighting.h"
 #include "objects/Farmhouse.h"
+#include "objects/Tractor.h"
 
 class Scene {
 public:
@@ -29,4 +30,5 @@ private:
     Animation animation_;
     Lighting lighting_;
     Farmhouse farmhouse_;
+    Tractor tractor_;
 };
