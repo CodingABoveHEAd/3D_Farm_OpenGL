@@ -4,6 +4,7 @@
 #include "Lighting.h"
 #include "objects/Farmhouse.h"
 #include "objects/Tractor.h"
+#include "objects/Windmil.h"
 
 class Scene {
 public:

@@ -43,6 +43,7 @@ void Scene::render() const
     renderBoundary();
     farmhouse_.render();
     tractor_.drawTractor();
+    Windmill::drawWindmill(-14.0f, 1.0f, animation_.windmillAngle(), 1.15f);
     renderRocks();
     renderTransformationMarker();
 }

@@ -43,6 +43,7 @@ SOURCES=(
     "$PROJECT_ROOT/src/objects/Farmhouse.cpp"
     "$PROJECT_ROOT/src/objects/Vegetation.cpp"
     "$PROJECT_ROOT/src/objects/Tractor.cpp"
+    "$PROJECT_ROOT/src/objects/windmill.cpp"
 )
 
 echo "Building Phase 1..."
