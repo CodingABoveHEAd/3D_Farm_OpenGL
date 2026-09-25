@@ -17,6 +17,7 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - Phase 2 farm ground, crop region, and boundary fence
 - Phase 3 low-polygon farmhouse built from OpenGL primitives
 - Phase 4 reusable trees and repeated crop instances
+- Phase 5 entrance gate, farmhouse pathway, and simple environmental rocks
 
 ## Phase 2 Environment
 
@@ -36,6 +37,10 @@ The farmhouse is implemented in [Farmhouse.cpp](src/objects/Farmhouse.cpp) and u
 ## Phase 4 Trees and Crops
 
 Vegetation is implemented in [Vegetation.cpp](src/objects/Vegetation.cpp). `drawTree(x, z, scale)` builds each tree hierarchically from one trunk and three crown cubes. `drawCrop(x, z, scale)` builds each crop from a stem and two rotated leaves. The scene reuses these functions for six trees and 42 crops, with translated positions and small scale variations instead of duplicating geometry definitions.
+
+## Phase 5 Fence Details
+
+The existing perimeter fence now has an entrance opening on the front side at approximately `x = 10`. Two gate panels use translated, scaled, and rotated fence rails. A simple brown pathway begins at the gate and leads toward the farmhouse, while four small cube-based rocks add environmental detail without introducing textures or external models.
 
 ## Controls
 

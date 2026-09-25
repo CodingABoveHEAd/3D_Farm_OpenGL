@@ -5,6 +5,7 @@
 #include "objects/Vegetation.h"
 
 #include <GLFW/glfw3.h>
+#include <initializer_list>
 
 void Scene::handleInput()
 {
@@ -37,8 +38,10 @@ void Scene::render() const
     renderCropField();
     renderCrops();
     renderTrees();
+    renderPath();
     renderBoundary();
     farmhouse_.render();
+    renderRocks();
     renderTransformationMarker();
 }
 
@@ -123,7 +126,10 @@ void Scene::renderBoundary() const
 
     for (int x = -24; x <= 24; x += 8)
     {
-        drawFencePost(static_cast<float>(x), -halfDepth);
+        if (x < 8 || x > 12)
+        {
+            drawFencePost(static_cast<float>(x), -halfDepth);
+        }
         drawFencePost(static_cast<float>(x), halfDepth);
     }
     for (int z = -16; z <= 16; z += 8)
@@ -132,10 +138,46 @@ void Scene::renderBoundary() const
         drawFencePost(halfWidth, static_cast<float>(z));
     }
 
-    drawFenceRail(0.0f, -halfDepth, 48.0f, false);
+    drawFenceRail(-8.0f, -halfDepth, 32.0f, false);
+    drawFenceRail(18.0f, -halfDepth, 12.0f, false);
     drawFenceRail(0.0f, halfDepth, 48.0f, false);
     drawFenceRail(-halfWidth, 0.0f, 38.0f, true);
     drawFenceRail(halfWidth, 0.0f, 38.0f, true);
+    renderGate();
+}
+
+void Scene::renderPath() const
+{
+    glColor3f(0.58f, 0.42f, 0.23f);
+
+    glPushMatrix();
+    glTranslatef(10.0f, 0.035f, -5.5f);
+    glScalef(1.0f, 1.0f, 1.0f);
+    Primitives::drawPlane(3.5f, 27.0f);
+    glPopMatrix();
+}
+
+void Scene::renderGate() const
+{
+    glColor3f(0.28f, 0.12f, 0.04f);
+    drawFencePost(8.0f, -19.0f);
+    drawFencePost(12.0f, -19.0f);
+
+    drawGatePanel(9.0f, -5.0f);
+    drawGatePanel(11.0f, 5.0f);
+}
+
+void Scene::drawGatePanel(float x, float angle) const
+{
+    for (float y : {0.70f, 1.45f})
+    {
+        glPushMatrix();
+        glTranslatef(x, y, -19.0f);
+        glRotatef(angle, 0.0f, 1.0f, 0.0f);
+        glScalef(2.0f, 0.16f, 0.16f);
+        Primitives::drawCube(1.0f, 1.0f, 1.0f);
+        glPopMatrix();
+    }
 }
 
 void Scene::drawFencePost(float x, float z) const
@@ -156,6 +198,25 @@ void Scene::drawFenceRail(float x, float z, float length, bool rotate) const
         glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
     }
     glScalef(length, 0.16f, 0.16f);
+    Primitives::drawCube(1.0f, 1.0f, 1.0f);
+    glPopMatrix();
+}
+
+void Scene::renderRocks() const
+{
+    glColor3f(0.30f, 0.32f, 0.28f);
+    drawRock(-20.0f, -6.0f, 0.75f, 18.0f);
+    drawRock(20.0f, -5.0f, 0.55f, 35.0f);
+    drawRock(-19.0f, 5.0f, 0.45f, 12.0f);
+    drawRock(20.0f, 9.0f, 0.70f, 52.0f);
+}
+
+void Scene::drawRock(float x, float z, float scale, float rotation) const
+{
+    glPushMatrix();
+    glTranslatef(x, scale * 0.28f, z);
+    glRotatef(rotation, 0.0f, 1.0f, 0.0f);
+    glScalef(scale, scale * 0.55f, scale * 0.75f);
     Primitives::drawCube(1.0f, 1.0f, 1.0f);
     glPopMatrix();
 }

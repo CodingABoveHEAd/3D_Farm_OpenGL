@@ -17,9 +17,14 @@ private:
     void renderCrops() const;
     void renderTrees() const;
     void renderBoundary() const;
+    void renderPath() const;
+    void renderGate() const;
+    void renderRocks() const;
     void renderTransformationMarker() const;
     void drawFencePost(float x, float z) const;
     void drawFenceRail(float x, float z, float length, bool rotate) const;
+    void drawGatePanel(float x, float angle) const;
+    void drawRock(float x, float z, float scale, float rotation) const;
 
     Animation animation_;
     Lighting lighting_;
