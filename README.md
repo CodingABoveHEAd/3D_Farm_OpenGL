@@ -14,6 +14,18 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - A 3D ground plane and verification grid
 - A reference cube rendered with a model transformation
 - Mouse-look camera rotation
+- Phase 2 farm ground, crop region, and boundary fence
+
+## Phase 2 Environment
+
+The farm uses a simple world-coordinate layout:
+
+- Grass: 60 x 60 ground plane centered at `(0, 0, 0)`
+- Crop field: translated toward negative Z, rotated by `-3` degrees, and scaled from a reusable plane
+- Boundary: cube-based fence around approximately `x = -24..24`, `z = -19..19`
+- Transformation marker: a red cube at `(-14, 1, 8)` with visible translation, rotation, and non-uniform scaling
+
+The crop field contains only farmland rows for visual organization. No crops, farmhouse, tractor, windmill, trees, or animation have been added yet.
 
 ## Controls
 
@@ -35,6 +47,16 @@ On Windows with the existing MSYS2 UCRT64 GLFW installation, run this from Power
 ```
 
 The script compiles all files under `src/` into `build/Phase1Farm.exe`, adds the local GLFW DLL directory to `PATH`, and launches the program.
+
+For Git Bash, run:
+
+```bash
+cd /d/4-1/3D_Farm_OpenGl
+chmod +x run_phase1.sh
+./run_phase1.sh
+```
+
+The script compiles with the MSYS2 UCRT64 GLFW installation and launches the Phase 2 environment.
 
 ## Build
 

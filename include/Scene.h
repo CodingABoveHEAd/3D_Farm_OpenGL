@@ -12,6 +12,11 @@ public:
 
 private:
     void renderGround() const;
+    void renderCropField() const;
+    void renderBoundary() const;
+    void renderTransformationMarker() const;
+    void drawFencePost(float x, float z) const;
+    void drawFenceRail(float x, float z, float length, bool rotate) const;
 
     Animation animation_;
     Lighting lighting_;
