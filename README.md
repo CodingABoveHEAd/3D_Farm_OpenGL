@@ -15,6 +15,7 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - A reference cube rendered with a model transformation
 - Mouse-look camera rotation
 - Phase 2 farm ground, crop region, and boundary fence
+- Phase 3 low-polygon farmhouse built from OpenGL primitives
 
 ## Phase 2 Environment
 
@@ -25,7 +26,11 @@ The farm uses a simple world-coordinate layout:
 - Boundary: cube-based fence around approximately `x = -24..24`, `z = -19..19`
 - Transformation marker: a red cube at `(-14, 1, 8)` with visible translation, rotation, and non-uniform scaling
 
-The crop field contains only farmland rows for visual organization. No crops, farmhouse, tractor, windmill, trees, or animation have been added yet.
+The crop field contains only farmland rows for visual organization. No crops, tractor, windmill, trees, or animation have been added yet.
+
+## Phase 3 Farmhouse
+
+The farmhouse is implemented in [Farmhouse.cpp](src/objects/Farmhouse.cpp) and uses separate functions for its body, two-part roof, door, windows, chimney, and porch. It is placed near `(10, 0, 7)` using world coordinates. Each component demonstrates translation, rotation, and scaling through the legacy OpenGL model matrix stack.
 
 ## Controls
 

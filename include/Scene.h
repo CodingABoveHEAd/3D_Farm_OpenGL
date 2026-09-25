@@ -2,6 +2,7 @@
 
 #include "Animation.h"
 #include "Lighting.h"
+#include "objects/Farmhouse.h"
 
 class Scene {
 public:
@@ -20,4 +21,5 @@ private:
 
     Animation animation_;
     Lighting lighting_;
+    Farmhouse farmhouse_;
 };

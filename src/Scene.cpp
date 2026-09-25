@@ -35,6 +35,7 @@ void Scene::render() const
     renderGround();
     renderCropField();
     renderBoundary();
+    farmhouse_.render();
     renderTransformationMarker();
 }
 

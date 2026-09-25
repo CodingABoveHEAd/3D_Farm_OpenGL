@@ -16,6 +16,7 @@ add_executable(Animated3DFarmScene
     src/Animation.cpp
     src/Lighting.cpp
     src/graphics/Primitives.cpp
+    src/objects/Farmhouse.cpp
 )
 
 target_include_directories(Animated3DFarmScene PRIVATE include)
