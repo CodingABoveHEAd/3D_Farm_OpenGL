@@ -7,6 +7,11 @@
 #include <GLFW/glfw3.h>
 #include <initializer_list>
 
+Scene::Scene()
+{
+    Cloud::initField();
+}
+
 void Scene::handleInput()
 {
     if (Input::wasPressed(GLFW_KEY_N))
@@ -31,6 +36,7 @@ void Scene::update(float deltaTime)
 {
     animation_.update(deltaTime);
     tractor_.update(deltaTime);
+    Cloud::updateField(deltaTime);
 }
 
 void Scene::render() const
@@ -44,6 +50,8 @@ void Scene::render() const
     farmhouse_.render();
     tractor_.drawTractor();
     Windmill::drawWindmill(-14.0f, 1.0f, animation_.windmillAngle(), 1.15f);
+    Sky::drawSun();
+    Cloud::drawField();
     renderRocks();
     renderTransformationMarker();
 }

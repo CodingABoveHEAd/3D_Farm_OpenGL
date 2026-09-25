@@ -1,4 +1,4 @@
-#include "objects/Windmil.h"
+#include "objects/Windmill.h"
 
 #include "graphics/Primitives.h"
 

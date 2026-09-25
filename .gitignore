@@ -4,3 +4,5 @@ build/
 *.exe
 .vscode/
 test*
+*.ps1
+*.sh

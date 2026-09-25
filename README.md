@@ -19,6 +19,7 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - Phase 4 reusable trees and repeated crop instances
 - Phase 5 entrance gate, farmhouse pathway, and simple environmental rocks
 - Phase 6 low-polygon manually controlled tractor
+- Phase 8 sun and smoothly moving cloud groups
 
 ## Phase 2 Environment
 
@@ -46,6 +47,12 @@ The existing perimeter fence now has an entrance opening on the front side at ap
 ## Phase 6 Tractor
 
 The tractor is implemented in [Tractor.cpp](src/objects/Tractor.cpp). Its complete model is drawn under one root translation stored in `position_[3]`. The body, engine, cabin, roof, axles, wheels, and exhaust use local transforms relative to that root. Manual movement uses `I`, `J`, `K`, and `L`; wheel rotation changes only while the tractor is being moved.
+
+## Phase 8 Sky and Clouds
+
+The sky background uses the existing clear color set by the application. A low-polygon sphere is rendered as the sun in [sky.cpp](src/objects/sky.cpp). Each cloud in [cloud.cpp](src/objects/cloud.cpp) is a small hierarchy of three overlapping spheres.
+
+Cloud translation is controlled by `Animation::cloudOffset()`. Every frame, `Animation::update(deltaTime)` increases the offset by `0.8 * deltaTime`, so movement remains smooth and frame-rate independent. When the offset passes `28`, it wraps to `-28`, keeping clouds inside a repeating world-space range without accumulating an unbounded position.
 
 ## Controls
 

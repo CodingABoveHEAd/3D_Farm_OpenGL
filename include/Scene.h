@@ -4,10 +4,13 @@
 #include "Lighting.h"
 #include "objects/Farmhouse.h"
 #include "objects/Tractor.h"
-#include "objects/Windmil.h"
+#include "objects/Windmill.h"
+#include "objects/cloud.h"
+#include "objects/sky.h"
 
 class Scene {
 public:
+    Scene();
     void handleInput();
     void update(float deltaTime);
     void render() const;
