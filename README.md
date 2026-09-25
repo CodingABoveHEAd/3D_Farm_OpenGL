@@ -16,6 +16,7 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - Mouse-look camera rotation
 - Phase 2 farm ground, crop region, and boundary fence
 - Phase 3 low-polygon farmhouse built from OpenGL primitives
+- Phase 4 reusable trees and repeated crop instances
 
 ## Phase 2 Environment
 
@@ -31,6 +32,10 @@ The crop field contains only farmland rows for visual organization. No crops, tr
 ## Phase 3 Farmhouse
 
 The farmhouse is implemented in [Farmhouse.cpp](src/objects/Farmhouse.cpp) and uses separate functions for its body, two-part roof, door, windows, chimney, and porch. It is placed near `(10, 0, 7)` using world coordinates. Each component demonstrates translation, rotation, and scaling through the legacy OpenGL model matrix stack.
+
+## Phase 4 Trees and Crops
+
+Vegetation is implemented in [Vegetation.cpp](src/objects/Vegetation.cpp). `drawTree(x, z, scale)` builds each tree hierarchically from one trunk and three crown cubes. `drawCrop(x, z, scale)` builds each crop from a stem and two rotated leaves. The scene reuses these functions for six trees and 42 crops, with translated positions and small scale variations instead of duplicating geometry definitions.
 
 ## Controls
 

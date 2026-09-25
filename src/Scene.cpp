@@ -2,6 +2,7 @@
 
 #include "Input.h"
 #include "graphics/Primitives.h"
+#include "objects/Vegetation.h"
 
 #include <GLFW/glfw3.h>
 
@@ -34,6 +35,8 @@ void Scene::render() const
 {
     renderGround();
     renderCropField();
+    renderCrops();
+    renderTrees();
     renderBoundary();
     farmhouse_.render();
     renderTransformationMarker();
@@ -85,6 +88,30 @@ void Scene::renderCropField() const
         Primitives::drawCube(1.0f, 0.02f, 7.0f);
         glPopMatrix();
     }
+}
+
+void Scene::renderCrops() const
+{
+    for (int row = 0; row < 6; ++row)
+    {
+        const float z = -10.0f + static_cast<float>(row) * 1.35f;
+        for (int column = 0; column < 7; ++column)
+        {
+            const float x = -7.5f + static_cast<float>(column) * 2.5f;
+            const float size = 0.82f + static_cast<float>((row + column) % 3) * 0.08f;
+            Vegetation::drawCrop(x, z, size);
+        }
+    }
+}
+
+void Scene::renderTrees() const
+{
+    Vegetation::drawTree(-18.0f, -13.0f, 1.45f);
+    Vegetation::drawTree(-12.0f, -16.0f, 1.05f);
+    Vegetation::drawTree(18.0f, -13.0f, 1.25f);
+    Vegetation::drawTree(19.0f, 1.0f, 0.90f);
+    Vegetation::drawTree(-18.0f, 9.0f, 1.30f);
+    Vegetation::drawTree(18.0f, 14.0f, 1.55f);
 }
 
 void Scene::renderBoundary() const
