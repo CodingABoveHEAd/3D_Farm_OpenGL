@@ -41,6 +41,7 @@ SOURCES=(
     "$PROJECT_ROOT/src/Lighting.cpp"
     "$PROJECT_ROOT/src/graphics/Primitives.cpp"
     "$PROJECT_ROOT/src/objects/Farmhouse.cpp"
+    "$PROJECT_ROOT/src/objects/Animals.cpp"
     "$PROJECT_ROOT/src/objects/Vegetation.cpp"
     "$PROJECT_ROOT/src/objects/Tractor.cpp"
     "$PROJECT_ROOT/src/objects/windmill.cpp"

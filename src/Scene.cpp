@@ -45,6 +45,7 @@ void Scene::render() const
     renderCropField();
     renderCrops();
     renderTrees();
+    renderAnimals();
     renderPath();
     renderBoundary();
     farmhouse_.render();
@@ -53,7 +54,7 @@ void Scene::render() const
     Sky::drawSun();
     Cloud::drawField();
     renderRocks();
-    renderTransformationMarker();
+    // renderTransformationMarker();
 }
 
 void Scene::renderGround() const
@@ -126,6 +127,14 @@ void Scene::renderTrees() const
     Vegetation::drawTree(19.0f, 1.0f, 0.90f);
     Vegetation::drawTree(-18.0f, 9.0f, 1.30f);
     Vegetation::drawTree(18.0f, 14.0f, 1.55f);
+}
+
+void Scene::renderAnimals() const
+{
+    // Place cows in open pasture areas, away from the crop rows and buildings.
+    Animals::drawCow(-16.0f, -2.0f, 1.05f, 8.0f);
+    Animals::drawCow(16.0f, -7.0f, 0.90f, -18.0f);
+    Animals::drawCow(-15.0f, 14.0f, 0.82f, 28.0f);
 }
 
 void Scene::renderBoundary() const

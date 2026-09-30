@@ -3,6 +3,7 @@
 #include "Animation.h"
 #include "Lighting.h"
 #include "objects/Farmhouse.h"
+#include "objects/Animals.h"
 #include "objects/Tractor.h"
 #include "objects/Windmill.h"
 #include "objects/cloud.h"
@@ -21,6 +22,7 @@ private:
     void renderCropField() const;
     void renderCrops() const;
     void renderTrees() const;
+    void renderAnimals() const;
     void renderBoundary() const;
     void renderPath() const;
     void renderGate() const;

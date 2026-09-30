@@ -20,6 +20,7 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - Phase 5 entrance gate, farmhouse pathway, and simple environmental rocks
 - Phase 6 low-polygon manually controlled tractor
 - Phase 8 sun and smoothly moving cloud groups
+- Static grazing cows built from low-polygon primitives
 
 ## Phase 2 Environment
 
@@ -53,6 +54,10 @@ The tractor is implemented in [Tractor.cpp](src/objects/Tractor.cpp). Its comple
 The sky background uses the existing clear color set by the application. A low-polygon sphere is rendered as the sun in [sky.cpp](src/objects/sky.cpp). Each cloud in [cloud.cpp](src/objects/cloud.cpp) is a small hierarchy of three overlapping spheres.
 
 Cloud translation is controlled by `Animation::cloudOffset()`. Every frame, `Animation::update(deltaTime)` increases the offset by `0.8 * deltaTime`, so movement remains smooth and frame-rate independent. When the offset passes `28`, it wraps to `-28`, keeping clouds inside a repeating world-space range without accumulating an unbounded position.
+
+## Animals
+
+[Animals.cpp](src/objects/Animals.cpp) provides the reusable `Animals::drawCow(x, z, scale, rotation)` function. Each cow is built hierarchically from a body, patches, lowered neck and head, muzzle, ears, horns, eyes, four legs with hooves, and a tail. Three cows are placed in the open pasture with different world positions, scales, and rotations. They are static grazing poses; no new animal animation was added.
 
 ## Controls
 
