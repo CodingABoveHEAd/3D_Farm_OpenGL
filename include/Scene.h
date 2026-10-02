@@ -3,6 +3,7 @@
 #include "Animation.h"
 #include "FarmWorld.h"
 #include "Lighting.h"
+#include "objects/Barn.h"
 #include "objects/Farmhouse.h"
 #include "objects/Animals.h"
 #include "objects/Farmer.h"

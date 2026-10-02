@@ -20,6 +20,7 @@ add_executable(Animated3DFarmScene
     src/graphics/Shadow.cpp
     src/graphics/TextureManager.cpp
     src/objects/Farmhouse.cpp
+    src/objects/Barn.cpp
     src/objects/Animals.cpp
     src/objects/Vegetation.cpp
     src/objects/Tractor.cpp

@@ -276,8 +276,10 @@ void Camera::onMouseMove(double xPosition, double yPosition)
 void Camera::applyProjection(int width, int height) const
 {
     const float aspect = height > 0 ? static_cast<float>(width) / static_cast<float>(height) : 1.0f;
-    const float nearPlane = 0.1f;
-    const float farPlane = 200.0f;
+    // FIX: far plane was 200 but fog ends at 420 and the ground grid / farms are
+    // drawn out to ~380-480 units, so everything past 200 was clipped away.
+    const float nearPlane = 0.3f;
+    const float farPlane = 800.0f;
     const float top = nearPlane * std::tan(fieldOfView_ * Pi / 360.0f);
     const float right = top * aspect;
 

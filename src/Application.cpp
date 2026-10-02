@@ -19,6 +19,7 @@ bool Application::initialize(int width, int height, const char* title)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
     glfwWindowHint(GLFW_STENCIL_BITS, 8);
+    glfwWindowHint(GLFW_DEPTH_BITS, 24);
 
     window_ = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!window_)
@@ -35,6 +36,8 @@ bool Application::initialize(int width, int height, const char* title)
     glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glClearStencil(0);
     glClearColor(0.52f, 0.80f, 0.98f, 1.0f);
 
     int framebufferWidth = 0;

@@ -44,6 +44,7 @@ SOURCES=(
     "$PROJECT_ROOT/src/graphics/Shadow.cpp"
     "$PROJECT_ROOT/src/graphics/TextureManager.cpp"
     "$PROJECT_ROOT/src/objects/Farmhouse.cpp"
+    "$PROJECT_ROOT/src/objects/Barn.cpp"
     "$PROJECT_ROOT/src/objects/Animals.cpp"
     "$PROJECT_ROOT/src/objects/Vegetation.cpp"
     "$PROJECT_ROOT/src/objects/Tractor.cpp"

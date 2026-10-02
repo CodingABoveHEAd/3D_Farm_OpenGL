@@ -29,6 +29,15 @@ void Lighting::enableLighting()
     glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_NORMALIZE);
+    glShadeModel(GL_SMOOTH);
+
+    // FIX: OpenGL's default global ambient is (0.2,0.2,0.2) and it is added on
+    // top of every light's own ambient. That is the main cause of the washed
+    // out / over-exposed look. We control ambient per light instead.
+    const GLfloat globalAmbient[] = {0.0f, 0.0f, 0.0f, 1.0f};
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
+    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_FALSE);
 }
 
 void Lighting::disableLighting()
@@ -48,16 +57,16 @@ void Lighting::applyDirectional() const
     Shadow::setLightDirection(dir[0], dir[1], dir[2]);
 
     const GLfloat ambient[] = {
-        night_ ? 0.09f : 0.38f,
-        night_ ? 0.12f : 0.38f,
-        night_ ? 0.20f : 0.35f,
+        night_ ? 0.12f : 0.34f,
+        night_ ? 0.15f : 0.34f,
+        night_ ? 0.24f : 0.34f,
         1.0f
     };
 
     const GLfloat diffuse[] = {
-        night_ ? 0.20f : 0.98f,
-        night_ ? 0.25f : 0.95f,
-        night_ ? 0.45f : 0.85f,
+        night_ ? 0.20f : 0.72f,
+        night_ ? 0.25f : 0.70f,
+        night_ ? 0.45f : 0.64f,
         1.0f
     };
 
@@ -89,7 +98,7 @@ void Lighting::applyFarmLights(float farmX, float farmZ, float farmYaw) const
     const GLfloat porchPos[] = {porchWorldX, porchWorldY, porchWorldZ, 1.0f}; // w=1 is point light
 
     // Amber lantern glow
-    const float intensity = night_ ? 1.0f : 0.15f;
+    const float intensity = night_ ? 1.0f : 0.0f;
     const GLfloat porchDiff[] = {1.0f * intensity, 0.72f * intensity, 0.35f * intensity, 1.0f};
     const GLfloat porchAmb[]  = {0.15f * intensity, 0.10f * intensity, 0.05f * intensity, 1.0f};
 
@@ -124,7 +133,7 @@ void Lighting::applyPowerPlantLight(float x, float y, float z) const
 {
     // Industrial cool-white floodlight (GL_LIGHT2)
     const GLfloat plantPos[] = {x, y, z, 1.0f};
-    const float intensity = night_ ? 1.0f : 0.25f;
+    const float intensity = night_ ? 1.0f : 0.0f;
 
     const GLfloat plantDiff[] = {0.85f * intensity, 0.90f * intensity, 1.0f * intensity, 1.0f};
     const GLfloat plantAmb[]  = {0.10f * intensity, 0.12f * intensity, 0.15f * intensity, 1.0f};

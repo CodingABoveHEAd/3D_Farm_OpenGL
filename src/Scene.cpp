@@ -157,6 +157,11 @@ void Scene::renderFarm(int farmIndex, bool isNearest) const
     renderPath();
     renderBoundary();
     farmhouse_.render();
+    // Barn on selected farms for variety
+    if (farmIndex % 3 == 1)
+        Barn::drawBarn(-10.5f, 12.5f, 0.52f, 18.0f);
+    else if (farmIndex % 3 == 2)
+        Barn::drawBarn(13.5f, 10.0f, 0.44f, -12.0f);
     tractor_.drawTractor();
     Windmill::drawWindmill(-14.0f, 1.0f, animation_.windmillAngle(), 1.15f);
     renderRocks();
@@ -170,6 +175,10 @@ void Scene::renderFarmShadows(int farmIndex) const
     Shadow::begin(0.03f);
 
     farmhouse_.render();
+    if (farmIndex % 3 == 1)
+        Barn::drawBarn(-10.5f, 12.5f, 0.52f, 18.0f);
+    else if (farmIndex % 3 == 2)
+        Barn::drawBarn(13.5f, 10.0f, 0.44f, -12.0f);
     tractor_.drawTractor();
     Windmill::drawWindmill(-14.0f, 1.0f, animation_.windmillAngle(), 1.15f);
 
