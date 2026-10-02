@@ -63,17 +63,21 @@ Cloud translation is controlled by `Animation::cloudOffset()`. Every frame, `Ani
 
 - `W`, `A`, `S`, `D`: move the camera
 - `Q`, `E`: move vertically
+## Multi-Farm World
+
+`FarmWorld` expands the original farm into nine countryside farms. The existing
+farm renderer is reused for every instance with small rotation and scale
+variations. Farms are arranged organically rather than in a rectangular grid,
+and a branched dirt-road network connects their gate paths. The world also
+contains deterministic ground variation, ponds, tree clusters, bushes, rocks,
+hay bales, power lines, hills, fog, and distant clouds.
+
+FarmWorld travel controls are `M` for the next farm, `B` for the previous farm,
+and number keys `1` through `9` for direct travel. Travel uses a short elevated
+arc so the wider countryside can be read while moving between farms.
 - Mouse: rotate the camera
 - Arrow keys: rotate the camera as an alternative
 - `R`: reset the camera
-- `I`, `K`: move tractor forward/backward
-- `J`, `L`: move tractor left/right
-- `Esc`: exit
-
-The mouse cursor is captured while the application is running. Press `Esc` to close the window and release the cursor.
-
-## Phase 1 Run Script
-
 On Windows with the existing MSYS2 UCRT64 GLFW installation, run this from PowerShell:
 
 ```powershell

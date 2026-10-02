@@ -127,26 +127,68 @@ void Camera::update(GLFWwindow* window, float deltaTime)
         }
     }
 
-    // ---- Keyboard look ----
-    if (Input::isDown(GLFW_KEY_LEFT))
+    // Camera Mode Switching
+    if (Input::wasPressed(GLFW_KEY_F1)) mode_ = CameraMode::Free;
+    if (Input::wasPressed(GLFW_KEY_F2)) mode_ = CameraMode::Overview;
+    if (Input::wasPressed(GLFW_KEY_F3)) mode_ = CameraMode::FarmFocus;
+    if (Input::wasPressed(GLFW_KEY_F4)) mode_ = CameraMode::TractorFollow;
+
+    // Reset camera with Home or F5 (R is now for windmill control)
+    if (Input::wasPressed(GLFW_KEY_HOME) || Input::wasPressed(GLFW_KEY_F5))
     {
-        yaw_ -= KeyLookSpeed * deltaTime;
-    }
-    if (Input::isDown(GLFW_KEY_RIGHT))
-    {
-        yaw_ += KeyLookSpeed * deltaTime;
-    }
-    if (Input::isDown(GLFW_KEY_UP))
-    {
-        pitch_ += KeyLookSpeed * deltaTime;
-    }
-    if (Input::isDown(GLFW_KEY_DOWN))
-    {
-        pitch_ -= KeyLookSpeed * deltaTime;
+        reset();
     }
 
-    // ---- Smoothed mouse look ----
-    // Mouse deltas are queued in onMouseMove() and applied gradually here
+    if (mode_ == CameraMode::Overview)
+    {
+        // High-altitude circular orbit around entire countryside
+        orbitAngle_ += 6.5f * deltaTime;
+        const float rad = orbitAngle_ * Pi / 180.0f;
+        position_[0] = std::sin(rad) * 260.0f;
+        position_[1] = 115.0f;
+        position_[2] = std::cos(rad) * 260.0f;
+        yaw_ = -orbitAngle_ - 90.0f;
+        pitch_ = -22.0f;
+        velocity[0] = velocity[1] = velocity[2] = 0.0f;
+        return;
+    }
+    else if (mode_ == CameraMode::FarmFocus)
+    {
+        // Low cinematic orbit around nearest farm
+        orbitAngle_ += 14.0f * deltaTime;
+        const float rad = orbitAngle_ * Pi / 180.0f;
+        position_[0] = farmFocusPos_[0] + std::sin(rad) * 54.0f;
+        position_[1] = 18.0f;
+        position_[2] = farmFocusPos_[1] + std::cos(rad) * 54.0f;
+        yaw_ = -orbitAngle_ - 90.0f;
+        pitch_ = -16.0f;
+        velocity[0] = velocity[1] = velocity[2] = 0.0f;
+        return;
+    }
+    else if (mode_ == CameraMode::TractorFollow)
+    {
+        // 3rd person chase camera behind tractor
+        const float rad = tractorHeading_ * Pi / 180.0f;
+        const float chaseDist = 11.5f;
+        const float chaseHeight = 5.2f;
+
+        // Position behind tractor (tractor faces -Z in local coords, so behind is +Z rotated by heading)
+        const float targetCamX = tractorPos_[0] + std::sin(rad) * chaseDist;
+        const float targetCamZ = tractorPos_[2] + std::cos(rad) * chaseDist;
+        const float targetCamY = tractorPos_[1] + chaseHeight;
+
+        const float followBlend = 1.0f - std::exp(-9.0f * deltaTime);
+        position_[0] += (targetCamX - position_[0]) * followBlend;
+        position_[1] += (targetCamY - position_[1]) * followBlend;
+        position_[2] += (targetCamZ - position_[2]) * followBlend;
+
+        yaw_ = tractorHeading_ - 90.0f;
+        pitch_ = -18.0f;
+        velocity[0] = velocity[1] = velocity[2] = 0.0f;
+        return;
+    }
+
+    // ---- Free Mode: Smoothed mouse look ----
     const float lookBlend = 1.0f - std::exp(-LookResponsiveness * deltaTime);
     const float appliedYaw = pendingYaw * lookBlend;
     const float appliedPitch = pendingPitch * lookBlend;
@@ -157,7 +199,6 @@ void Camera::update(GLFWwindow* window, float deltaTime)
 
     pitch_ = clampPitch(pitch_);
 
-    // Keep yaw in a sane range so it never loses float precision
     if (yaw_ > 360.0f)
     {
         yaw_ -= 360.0f;
@@ -167,7 +208,7 @@ void Camera::update(GLFWwindow* window, float deltaTime)
         yaw_ += 360.0f;
     }
 
-    // ---- Movement ----
+    // ---- Movement (WASD + QE) ----
     const float yawRadians = yaw_ * Pi / 180.0f;
     const float forwardX = std::cos(yawRadians);
     const float forwardZ = std::sin(yawRadians);
@@ -183,7 +224,6 @@ void Camera::update(GLFWwindow* window, float deltaTime)
     if (Input::isDown(GLFW_KEY_Q)) lift += 1.0f;
     if (Input::isDown(GLFW_KEY_E)) lift -= 1.0f;
 
-    // Normalize so diagonal movement isn't faster
     const float planarLength = std::sqrt(forward * forward + strafe * strafe);
     if (planarLength > 1.0f)
     {
@@ -191,18 +231,15 @@ void Camera::update(GLFWwindow* window, float deltaTime)
         strafe /= planarLength;
     }
 
-    // Target velocity in world space
     const float targetX = (forwardX * forward - forwardZ * strafe) * MoveSpeed;
     const float targetZ = (forwardZ * forward + forwardX * strafe) * MoveSpeed;
     const float targetY = lift * MoveSpeed;
 
-    // Ease toward the target velocity (smooth start and stop)
     const float moveBlend = 1.0f - std::exp(-MoveResponsiveness * deltaTime);
     velocity[0] += (targetX - velocity[0]) * moveBlend;
     velocity[1] += (targetY - velocity[1]) * moveBlend;
     velocity[2] += (targetZ - velocity[2]) * moveBlend;
 
-    // Snap tiny leftovers to zero
     for (float& v : velocity)
     {
         if (std::fabs(v) < 0.001f)
@@ -214,11 +251,6 @@ void Camera::update(GLFWwindow* window, float deltaTime)
     position_[0] += velocity[0] * deltaTime;
     position_[1] += velocity[1] * deltaTime;
     position_[2] += velocity[2] * deltaTime;
-
-    if (Input::wasPressed(GLFW_KEY_R))
-    {
-        reset();
-    }
 }
 
 void Camera::onMouseMove(double xPosition, double yPosition)
@@ -261,4 +293,62 @@ void Camera::applyView() const
     glRotatef(-pitch_, 1.0f, 0.0f, 0.0f);
     glRotatef(-yaw_ - 90.0f, 0.0f, 1.0f, 0.0f);
     glTranslatef(-position_[0], -position_[1], -position_[2]);
+}
+
+float Camera::posX() const
+{
+    return position_[0];
+}
+
+float Camera::posY() const
+{
+    return position_[1];
+}
+
+float Camera::posZ() const
+{
+    return position_[2];
+}
+
+float Camera::yawDegrees() const
+{
+    return yaw_;
+}
+
+float Camera::pitchDegrees() const
+{
+    return pitch_;
+}
+
+void Camera::setPose(float x, float y, float z, float yaw, float pitch)
+{
+    position_[0] = x;
+    position_[1] = y;
+    position_[2] = z;
+    yaw_ = yaw;
+    pitch_ = clampPitch(pitch);
+}
+
+void Camera::setMode(CameraMode mode)
+{
+    mode_ = mode;
+}
+
+CameraMode Camera::mode() const
+{
+    return mode_;
+}
+
+void Camera::setTractorPose(float x, float y, float z, float heading)
+{
+    tractorPos_[0] = x;
+    tractorPos_[1] = y;
+    tractorPos_[2] = z;
+    tractorHeading_ = heading;
+}
+
+void Camera::setFocusFarm(float x, float z)
+{
+    farmFocusPos_[0] = x;
+    farmFocusPos_[1] = z;
 }

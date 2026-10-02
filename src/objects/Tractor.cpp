@@ -5,6 +5,7 @@
 
 #include <GLFW/glfw3.h>
 #include <cmath>
+#include <initializer_list>
 
 namespace
 {
@@ -102,68 +103,158 @@ void drawCabinGlass()
 // UPDATE
 // ============================================================
 
+void Tractor::toggleHeadlights()
+{
+    headlightsOn_ = !headlightsOn_;
+}
+
+bool Tractor::isHeadlightsOn() const
+{
+    return headlightsOn_;
+}
+
 void Tractor::update(float deltaTime)
 {
-    float moveX = 0.0f;
-    float moveZ = 0.0f;
-
-    // J = left
-    if (Input::isDown(GLFW_KEY_J))
+    // Toggle headlights with L
+    if (Input::wasPressed(GLFW_KEY_L))
     {
-        moveX -= 1.0f;
+        toggleHeadlights();
     }
 
-    // L = right
-    if (Input::isDown(GLFW_KEY_L))
+    // Steering input (Left / Right arrows, or A / D, or J / L)
+    float steerTarget = 0.0f;
+    if (Input::isDown(GLFW_KEY_LEFT) || Input::isDown(GLFW_KEY_A) || Input::isDown(GLFW_KEY_J))
     {
-        moveX += 1.0f;
+        steerTarget += 32.0f;
+    }
+    if (Input::isDown(GLFW_KEY_RIGHT) || Input::isDown(GLFW_KEY_D))
+    {
+        steerTarget -= 32.0f;
     }
 
-    // I = forward
-    if (Input::isDown(GLFW_KEY_I))
+    // Smooth steering response
+    const float steerBlend = 1.0f - std::exp(-8.0f * deltaTime);
+    steeringAngle_ += (steerTarget - steeringAngle_) * steerBlend;
+
+    // Throttle / Reverse input (Up / Down arrows, or W / S, or I / K)
+    float targetSpeed = 0.0f;
+    if (Input::isDown(GLFW_KEY_UP) || Input::isDown(GLFW_KEY_I))
     {
-        moveZ -= 1.0f;
+        targetSpeed += TractorSpeed;
+    }
+    if (Input::isDown(GLFW_KEY_DOWN) || Input::isDown(GLFW_KEY_K))
+    {
+        targetSpeed -= TractorSpeed * 0.65f;
     }
 
-    // K = backward
-    if (Input::isDown(GLFW_KEY_K))
+    // Smooth speed response
+    const float accelBlend = 1.0f - std::exp(-6.0f * deltaTime);
+    speed_ += (targetSpeed - speed_) * accelBlend;
+
+    if (std::abs(speed_) > 0.01f)
     {
-        moveZ += 1.0f;
+        // When moving, heading rotates based on steering angle
+        const float turnRate = (steeringAngle_ / 32.0f) * (speed_ / TractorSpeed) * 45.0f;
+        heading_ += turnRate * deltaTime;
+
+        // Keep heading in [0, 360)
+        while (heading_ >= 360.0f) heading_ -= 360.0f;
+        while (heading_ < 0.0f) heading_ += 360.0f;
+
+        // Move forward along heading vector (forward is -Z in local tractor space)
+        const float rad = heading_ * Pi / 180.0f;
+        const float dx = -std::sin(rad) * speed_ * deltaTime;
+        const float dz = -std::cos(rad) * speed_ * deltaTime;
+
+        position_[0] += dx;
+        position_[2] += dz;
+
+        // Soft bounds clamp allowing yard and road driving
+        position_[0] = std::fmax(-35.0f, std::fmin(35.0f, position_[0]));
+        position_[2] = std::fmax(-30.0f, std::fmin(30.0f, position_[2]));
+
+        // Wheel rotation proportional to distance traveled
+        const float distance = speed_ * deltaTime;
+        const float wheelRadius = 0.85f;
+        wheelRotation_ += (distance / wheelRadius) * (180.0f / Pi);
+
+        while (wheelRotation_ >= 360.0f) wheelRotation_ -= 360.0f;
+        while (wheelRotation_ < 0.0f) wheelRotation_ += 360.0f;
+    }
+}
+
+// ============================================================
+// HEADLIGHT BEAMS & DUST
+// ============================================================
+
+void Tractor::drawHeadlightBeams() const
+{
+    glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending for volumetric glow
+    glDepthMask(GL_FALSE);
+    glDisable(GL_LIGHTING);
+
+    for (float hx : {-0.95f, 0.95f})
+    {
+        glPushMatrix();
+        glTranslatef(hx, 1.25f, -2.35f);
+
+        // Warm bright yellow-white light cone
+        glColor4f(1.0f, 0.95f, 0.65f, 0.14f);
+
+        constexpr int segs = 14;
+        constexpr float length = 14.0f;
+        constexpr float endRadius = 3.6f;
+
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex3f(0.0f, 0.0f, 0.0f); // Apex at headlight lens
+        for (int i = 0; i <= segs; ++i)
+        {
+            const float angle = static_cast<float>(i) * 2.0f * Pi / segs;
+            const float cx = std::cos(angle) * endRadius;
+            const float cy = std::sin(angle) * endRadius;
+            glVertex3f(cx, cy - 0.5f, -length);
+        }
+        glEnd();
+
+        glPopMatrix();
     }
 
-    const float moveLength =
-        std::sqrt(moveX * moveX + moveZ * moveZ);
+    glPopAttrib();
+}
 
-    if (moveLength <= 0.0f)
+void Tractor::drawDust(float time) const
+{
+    if (std::abs(speed_) < 0.2f) return;
+
+    glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_LIGHTING);
+
+    // Dust puffs behind rear wheels
+    for (int i = 0; i < 6; ++i)
     {
-        return;
+        const float phase = std::fmod(time * 3.5f + static_cast<float>(i) * 0.45f, 1.0f);
+        const float size = 0.25f + phase * 0.85f;
+        const float alpha = (1.0f - phase) * 0.28f;
+        const float pz = 1.9f + phase * 2.8f;
+        const float py = 0.25f + phase * 0.6f;
+
+        for (float px : {-1.9f, 1.9f})
+        {
+            glColor4f(0.68f, 0.58f, 0.40f, alpha);
+            glPushMatrix();
+            glTranslatef(px + (i % 2 == 0 ? 0.2f : -0.2f), py, pz);
+            glScalef(size, size * 0.75f, size);
+            Primitives::drawCube(1.0f, 1.0f, 1.0f);
+            glPopMatrix();
+        }
     }
 
-    const float distance = TractorSpeed * deltaTime;
-
-    moveX = moveX / moveLength * distance;
-    moveZ = moveZ / moveLength * distance;
-
-    position_[0] += moveX;
-    position_[2] += moveZ;
-
-    // Keep tractor inside the farm
-    position_[0] =
-        std::fmax(-19.0f, std::fmin(19.0f, position_[0]));
-
-    position_[2] =
-        std::fmax(-15.5f, std::fmin(15.5f, position_[2]));
-
-    // Wheel rotation
-    const float wheelRadius = 0.85f;
-
-    wheelRotation_ +=
-        distance / wheelRadius * 180.0f / Pi;
-
-    if (wheelRotation_ >= 360.0f)
-    {
-        wheelRotation_ -= 360.0f;
-    }
+    glPopAttrib();
 }
 
 // ============================================================
@@ -174,12 +265,9 @@ void Tractor::drawTractor() const
 {
     glPushMatrix();
 
-    // Move entire tractor
-    glTranslatef(
-        position_[0],
-        position_[1],
-        position_[2]
-    );
+    // Move entire tractor and rotate by heading
+    glTranslatef(position_[0], position_[1], position_[2]);
+    glRotatef(heading_, 0.0f, 1.0f, 0.0f);
 
     // Main components
     drawBody();
@@ -191,22 +279,13 @@ void Tractor::drawTractor() const
     drawAxle(-1.45f);
     drawAxle(1.35f);
 
-    // Wheels
-    drawWheel(
-        -2.15f, -1.45f,
-        0.72f, 0.48f, false);
+    // Wheels: front wheels turn with steeringAngle_
+    drawWheel(-2.15f, -1.45f, 0.72f, 0.48f, false, true);
+    drawWheel( 2.15f, -1.45f, 0.72f, 0.48f, true,  true);
 
-    drawWheel(
-         2.15f, -1.45f,
-        0.72f, 0.48f, true);
-
-    drawWheel(
-        -2.20f, 1.35f,
-        0.92f, 0.55f, false);
-
-    drawWheel(
-         2.20f, 1.35f,
-        0.92f, 0.55f, true);
+    // Rear wheels: fixed steering
+    drawWheel(-2.20f,  1.35f, 0.92f, 0.55f, false, false);
+    drawWheel( 2.20f,  1.35f, 0.92f, 0.55f, true,  false);
 
     // Fender arches / guards
     drawFender(-2.20f, 1.35f, 0.92f, false);
@@ -218,6 +297,13 @@ void Tractor::drawTractor() const
     // Front details
     drawHeadlight(-0.95f, -2.27f);
     drawHeadlight( 0.95f, -2.27f);
+
+    if (headlightsOn_)
+    {
+        drawHeadlightBeams();
+    }
+
+    drawDust(static_cast<float>(glfwGetTime()));
 
     drawBumper();
 
@@ -950,206 +1036,78 @@ void Tractor::drawWheel(
     float z,
     float radius,
     float width,
-    bool rightSide) const
+    bool rightSide,
+    bool isFront) const
 {
-    // Tire
-    glColor3f(
-        0.025f,
-        0.025f,
-        0.022f
-    );
-
     glPushMatrix();
 
-    glTranslatef(
-        x,
-        radius,
-        z
-    );
+    // 1. Position wheel at axle end
+    glTranslatef(x, radius, z);
 
-    // Rotate wheel while tractor moves
-    glRotatef(
-        wheelRotation_,
-        1.0f,
-        0.0f,
-        0.0f
-    );
+    // 2. Steer front wheels around vertical axis Y
+    if (isFront)
+    {
+        glRotatef(steeringAngle_, 0.0f, 1.0f, 0.0f);
+    }
 
-    // Put cylinder axis along X
-    glRotatef(
-        rightSide ? -90.0f : 90.0f,
-        0.0f,
-        0.0f,
-        1.0f
-    );
-
-    Primitives::drawCylinder(
-        radius,
-        width,
-        14
-    );
-
-    glPopMatrix();
-
-    // Metal rim
-    glColor3f(
-        0.38f,
-        0.39f,
-        0.36f
-    );
-
-    glPushMatrix();
-
-    glTranslatef(
-        x,
-        radius,
-        z
-    );
-
-    glRotatef(
-        rightSide ? -90.0f : 90.0f,
-        0.0f,
-        0.0f,
-        1.0f
-    );
-
-    Primitives::drawCylinder(
-        radius * 0.55f,
-        width + 0.025f,
-        14
-    );
-
-    glPopMatrix();
-
-    // Painted inner rim disc
-    glColor3f(
-        0.90f,
-        0.72f,
-        0.12f
-    );
-
-    glPushMatrix();
-
-    glTranslatef(
-        x,
-        radius,
-        z
-    );
-
-    glRotatef(
-        rightSide ? -90.0f : 90.0f,
-        0.0f,
-        0.0f,
-        1.0f
-    );
-
-    Primitives::drawCylinder(
-        radius * 0.46f,
-        width + 0.035f,
-        14
-    );
-
-    glPopMatrix();
-
-    // Central hub
-    glColor3f(
-        0.12f,
-        0.13f,
-        0.12f
-    );
-
-    glPushMatrix();
-
-    glTranslatef(
-        x,
-        radius,
-        z
-    );
-
-    glRotatef(
-        rightSide ? -90.0f : 90.0f,
-        0.0f,
-        0.0f,
-        1.0f
-    );
-
-    Primitives::drawCylinder(
-        radius * 0.20f,
-        width + 0.05f,
-        10
-    );
-
-    glPopMatrix();
-
-    // ---- Extra detail: herringbone tread lugs + hub bolts ----
-    // These rotate with the wheel so the rolling is visible.
+    // 3. Roll wheel around axle X
+    glRotatef(wheelRotation_, 1.0f, 0.0f, 0.0f);
 
     const float sideSign = rightSide ? 1.0f : -1.0f;
 
+    // --- Tire ---
+    glColor3f(0.025f, 0.025f, 0.022f);
     glPushMatrix();
+    glRotatef(rightSide ? -90.0f : 90.0f, 0.0f, 0.0f, 1.0f);
+    Primitives::drawCylinder(radius, width, 14);
+    glPopMatrix();
 
-    glTranslatef(
-        x,
-        radius,
-        z
-    );
+    // --- Metal rim ---
+    glColor3f(0.38f, 0.39f, 0.36f);
+    glPushMatrix();
+    glRotatef(rightSide ? -90.0f : 90.0f, 0.0f, 0.0f, 1.0f);
+    Primitives::drawCylinder(radius * 0.55f, width + 0.025f, 14);
+    glPopMatrix();
 
-    glRotatef(
-        wheelRotation_,
-        1.0f,
-        0.0f,
-        0.0f
-    );
+    // --- Painted inner rim disc ---
+    glColor3f(0.90f, 0.72f, 0.12f);
+    glPushMatrix();
+    glRotatef(rightSide ? -90.0f : 90.0f, 0.0f, 0.0f, 1.0f);
+    Primitives::drawCylinder(radius * 0.46f, width + 0.035f, 14);
+    glPopMatrix();
 
+    // --- Central hub ---
+    glColor3f(0.12f, 0.13f, 0.12f);
+    glPushMatrix();
+    glRotatef(rightSide ? -90.0f : 90.0f, 0.0f, 0.0f, 1.0f);
+    Primitives::drawCylinder(radius * 0.20f, width + 0.05f, 10);
+    glPopMatrix();
+
+    // --- Herringbone tread lugs ---
     const int lugCount = 20;
-
     for (int i = 0; i < lugCount; ++i)
     {
         const float angle = i * 360.0f / lugCount;
-
         for (int s = -1; s <= 1; s += 2)
         {
             glPushMatrix();
-
             glRotatef(angle, 1.0f, 0.0f, 0.0f);
-
-            glTranslatef(
-                s * width * 0.24f,
-                radius * 0.99f,
-                0.0f
-            );
-
+            glTranslatef(s * width * 0.24f, radius * 0.99f, 0.0f);
             glRotatef(-s * 30.0f, 0.0f, 1.0f, 0.0f);
-
-            drawBox(
-                0.05f, 0.05f, 0.045f,
-                0.0f, 0.0f, 0.0f,
-                width * 0.55f,
-                radius * 0.13f,
-                radius * 0.11f
-            );
-
+            drawBox(0.05f, 0.05f, 0.045f, 0.0f, 0.0f, 0.0f,
+                    width * 0.55f, radius * 0.13f, radius * 0.11f);
             glPopMatrix();
         }
     }
 
-    // Hub bolts on the outer face
+    // --- Hub bolts on the outer face ---
     for (int i = 0; i < 6; ++i)
     {
         glPushMatrix();
-
         glRotatef(i * 60.0f, 1.0f, 0.0f, 0.0f);
-
-        drawBox(
-            0.72f, 0.72f, 0.68f,
-            sideSign * (width * 0.5f + 0.035f),
-            radius * 0.32f,
-            0.0f,
-            0.05f,
-            radius * 0.08f,
-            radius * 0.08f
-        );
-
+        drawBox(0.72f, 0.72f, 0.68f,
+                sideSign * (width * 0.5f + 0.035f), radius * 0.32f, 0.0f,
+                0.05f, radius * 0.08f, radius * 0.08f);
         glPopMatrix();
     }
 
