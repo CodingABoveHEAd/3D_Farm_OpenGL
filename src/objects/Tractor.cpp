@@ -4,7 +4,9 @@
 #include "graphics/Primitives.h"
 
 #include <GLFW/glfw3.h>
+#include <algorithm>
 #include <cmath>
+#include <initializer_list>
 
 namespace
 {
@@ -166,6 +168,55 @@ void Tractor::update(float deltaTime)
     }
 }
 
+void Tractor::updateRoad(float deltaTime, float& z)
+{
+    z += 5.5f * deltaTime;
+    if (z > 78.0f)
+    {
+        z = -78.0f;
+    }
+}
+
+void Tractor::drawRoadTractor(float z, Color color) const
+{
+    const float oldX = position_[0];
+    const float oldY = position_[1];
+    const float oldZ = position_[2];
+    displayColor_ = color;
+    position_[0] = 0.0f;
+    position_[1] = 0.0f;
+    position_[2] = z;
+    glPushMatrix();
+    glScalef(0.72f, 0.72f, 0.72f);
+    drawTractor();
+    glPopMatrix();
+    position_[0] = oldX;
+    position_[1] = oldY;
+    position_[2] = oldZ;
+    displayColor_ = Color::Red;
+}
+
+void Tractor::setBodyColor(float red, float green, float blue) const
+{
+    if (displayColor_ == Color::Red)
+    {
+        glColor3f(red, green, blue);
+        return;
+    }
+
+    const float tint[][3] = {
+        {red, green, blue},
+        {0.08f, 0.52f, 0.16f},
+        {0.08f, 0.24f, 0.78f},
+        {0.45f, 0.18f, 0.05f}};
+    const int index = static_cast<int>(displayColor_);
+    const float brightness = (red + green + blue) / 1.18f;
+    glColor3f(
+        std::min(1.0f, tint[index][0] * brightness),
+        std::min(1.0f, tint[index][1] * brightness),
+        std::min(1.0f, tint[index][2] * brightness));
+}
+
 // ============================================================
 // MAIN TRACTOR
 // ============================================================
@@ -248,7 +299,7 @@ void Tractor::drawTractor() const
 void Tractor::drawBody() const
 {
     // Main red chassis
-    glColor3f(0.72f, 0.06f, 0.025f);
+    setBodyColor(0.72f, 0.06f, 0.025f);
 
     glPushMatrix();
     glTranslatef(0.0f, 1.35f, 0.0f);
@@ -263,7 +314,7 @@ void Tractor::drawBody() const
     glPopMatrix();
 
     // Upper body
-    glColor3f(0.92f, 0.20f, 0.025f);
+    setBodyColor(0.92f, 0.20f, 0.025f);
 
     glPushMatrix();
     glTranslatef(
@@ -294,17 +345,15 @@ void Tractor::drawBody() const
     );
 
     // Side red panels
-    drawBox(
-        0.82f, 0.09f, 0.025f,
-        -2.08f, 1.55f, 0.0f,
-        0.12f, 1.0f, 3.1f
-    );
-
-    drawBox(
-        0.82f, 0.09f, 0.025f,
-         2.08f, 1.55f, 0.0f,
-        0.12f, 1.0f, 3.1f
-    );
+    for (float x : {-2.08f, 2.08f})
+    {
+        setBodyColor(0.82f, 0.09f, 0.025f);
+        glPushMatrix();
+        glTranslatef(x, 1.55f, 0.0f);
+        glScalef(0.12f, 1.0f, 3.1f);
+        Primitives::drawCube(1.0f, 1.0f, 1.0f);
+        glPopMatrix();
+    }
 
     // Decorative side stripe
     drawBox(
@@ -381,11 +430,7 @@ void Tractor::drawBody() const
 void Tractor::drawEngine() const
 {
     // Main hood
-    glColor3f(
-        0.88f,
-        0.12f,
-        0.025f
-    );
+    setBodyColor(0.88f, 0.12f, 0.025f);
 
     glPushMatrix();
 
@@ -410,11 +455,7 @@ void Tractor::drawEngine() const
     glPopMatrix();
 
     // Hood top
-    glColor3f(
-        0.95f,
-        0.18f,
-        0.025f
-    );
+    setBodyColor(0.95f, 0.18f, 0.025f);
 
     glPushMatrix();
 

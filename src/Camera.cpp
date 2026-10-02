@@ -9,21 +9,18 @@
 namespace {
 constexpr float Pi = 3.14159265358979323846f;
 
-constexpr float MoveSpeed = 5.0f;          // units per second
-constexpr float MoveResponsiveness = 12.0f; // higher = snappier acceleration
-constexpr float LookResponsiveness = 30.0f; // higher = less mouse smoothing
-constexpr float MouseSensitivity = 0.10f;
-constexpr float KeyLookSpeed = 60.0f;       // degrees per second
+constexpr float MoveSpeed = 11.0f;          // units per second
+constexpr float SprintMultiplier = 3.0f;    // hold Left Shift
+constexpr float SlowMultiplier = 0.3f;      // hold Left Ctrl
+constexpr float MoveResponsiveness = 20.0f; // smooth acceleration and braking
+constexpr float LookResponsiveness = 24.0f; // smooth mouse/keyboard look
+constexpr float MouseSensitivity = 0.08f;   // degrees per pixel
+constexpr float KeyLookSpeed = 90.0f;       // degrees per second
 constexpr float MaxDeltaTime = 0.05f;       // ignore frame-time spikes
-
-// Smoothing state (single camera, so file-level state is fine and
-// keeps Camera.h unchanged)
-float velocity[3] = {0.0f, 0.0f, 0.0f};
-float pendingYaw = 0.0f;
-float pendingPitch = 0.0f;
 
 bool initialized = false;
 bool cursorCaptured = false;
+bool prevLeftMouse = false;
 
 int windowedX = 100;
 int windowedY = 100;
@@ -33,6 +30,13 @@ int windowedHeight = 720;
 float clampPitch(float pitch)
 {
     return std::max(-89.0f, std::min(89.0f, pitch));
+}
+
+float wrapAngle(float angle)
+{
+    while (angle > 180.0f) angle -= 360.0f;
+    while (angle < -180.0f) angle += 360.0f;
+    return angle;
 }
 
 void toggleFullscreen(GLFWwindow* window)
@@ -56,16 +60,16 @@ void toggleFullscreen(GLFWwindow* window)
             windowedWidth, windowedHeight, 0);
     }
 
-    // Keep presentation synced to the monitor after the mode change
-    glfwSwapInterval(1);
+    glfwSwapInterval(0);
 }
 
 void setMouseLook(GLFWwindow* window, bool enabled)
 {
+    cursorCaptured = enabled;
+
     if (enabled)
     {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
         if (glfwRawMouseMotionSupported())
         {
             glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
@@ -73,6 +77,10 @@ void setMouseLook(GLFWwindow* window, bool enabled)
     }
     else
     {
+        if (glfwRawMouseMotionSupported())
+        {
+            glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+        }
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
 }
@@ -85,92 +93,85 @@ void Camera::reset()
     position_[2] = 10.0f;
     yaw_ = -90.0f;
     pitch_ = -15.0f;
+    targetYaw_ = yaw_;
+    targetPitch_ = pitch_;
     fieldOfView_ = 45.0f;
     firstMouse_ = true;
 
-    velocity[0] = velocity[1] = velocity[2] = 0.0f;
-    pendingYaw = 0.0f;
-    pendingPitch = 0.0f;
+    velocity_[0] = velocity_[1] = velocity_[2] = 0.0f;
 }
 
 void Camera::update(GLFWwindow* window, float deltaTime)
 {
-    // Avoid huge jumps after a hitch (window drag, resize, etc.)
     deltaTime = std::min(deltaTime, MaxDeltaTime);
 
     if (window != nullptr)
     {
-        // One-time setup: visible cursor and vsync
         if (!initialized)
         {
-            glfwSwapInterval(1);
+            glfwSwapInterval(0);
             setMouseLook(window, false);
             initialized = true;
         }
 
-        // F11 = toggle fullscreen
+        // Lost focus (alt-tab etc.): release the mouse and stop moving
+        if (!glfwGetWindowAttrib(window, GLFW_FOCUSED))
+        {
+            if (cursorCaptured)
+            {
+                setMouseLook(window, false);
+            }
+            velocity_[0] = velocity_[1] = velocity_[2] = 0.0f;
+            prevLeftMouse = false;
+            return;
+        }
+
         if (Input::wasPressed(GLFW_KEY_F11))
         {
             toggleFullscreen(window);
         }
 
-        // Tab = toggle between a visible cursor and a captured (hidden)
-        // cursor. Captured mode lets you keep turning without ever
-        // hitting the edge of the screen.
+        // Click the window to capture the mouse (like most games)
+        const bool leftMouse =
+            glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+        if (leftMouse && !prevLeftMouse && !cursorCaptured)
+        {
+            setMouseLook(window, true);
+            firstMouse_ = true;
+        }
+        prevLeftMouse = leftMouse;
+
+        // Esc releases the mouse; Tab toggles it
+        if (cursorCaptured && Input::wasPressed(GLFW_KEY_ESCAPE))
+        {
+            setMouseLook(window, false);
+        }
         if (Input::wasPressed(GLFW_KEY_TAB))
         {
-            cursorCaptured = !cursorCaptured;
-            setMouseLook(window, cursorCaptured);
+            setMouseLook(window, !cursorCaptured);
             firstMouse_ = true;
-            pendingYaw = 0.0f;
-            pendingPitch = 0.0f;
         }
     }
 
-    // ---- Keyboard look ----
-    if (Input::isDown(GLFW_KEY_LEFT))
-    {
-        yaw_ -= KeyLookSpeed * deltaTime;
-    }
-    if (Input::isDown(GLFW_KEY_RIGHT))
-    {
-        yaw_ += KeyLookSpeed * deltaTime;
-    }
-    if (Input::isDown(GLFW_KEY_UP))
-    {
-        pitch_ += KeyLookSpeed * deltaTime;
-    }
-    if (Input::isDown(GLFW_KEY_DOWN))
-    {
-        pitch_ -= KeyLookSpeed * deltaTime;
-    }
+    // ---- Keyboard look (always available) ----
+    if (Input::isDown(GLFW_KEY_LEFT))  targetYaw_ -= KeyLookSpeed * deltaTime;
+    if (Input::isDown(GLFW_KEY_RIGHT)) targetYaw_ += KeyLookSpeed * deltaTime;
+    if (Input::isDown(GLFW_KEY_UP))    targetPitch_ += KeyLookSpeed * deltaTime;
+    if (Input::isDown(GLFW_KEY_DOWN))  targetPitch_ -= KeyLookSpeed * deltaTime;
 
-    // ---- Smoothed mouse look ----
-    // Mouse deltas are queued in onMouseMove() and applied gradually here
+    targetPitch_ = clampPitch(targetPitch_);
     const float lookBlend = 1.0f - std::exp(-LookResponsiveness * deltaTime);
-    const float appliedYaw = pendingYaw * lookBlend;
-    const float appliedPitch = pendingPitch * lookBlend;
-    yaw_ += appliedYaw;
-    pitch_ += appliedPitch;
-    pendingYaw -= appliedYaw;
-    pendingPitch -= appliedPitch;
-
-    pitch_ = clampPitch(pitch_);
-
-    // Keep yaw in a sane range so it never loses float precision
-    if (yaw_ > 360.0f)
-    {
-        yaw_ -= 360.0f;
-    }
-    else if (yaw_ < -360.0f)
-    {
-        yaw_ += 360.0f;
-    }
+    yaw_ += wrapAngle(targetYaw_ - yaw_) * lookBlend;
+    pitch_ += (targetPitch_ - pitch_) * lookBlend;
 
     // ---- Movement ----
-    const float yawRadians = yaw_ * Pi / 180.0f;
-    const float forwardX = std::cos(yawRadians);
-    const float forwardZ = std::sin(yawRadians);
+    const float yawRad = yaw_ * Pi / 180.0f;
+    // W/S use horizontal camera-forward and A/D use horizontal camera-right.
+    // Looking up or down never changes the height of WASD movement.
+    const float fwdX = std::cos(yawRad);
+    const float fwdZ = std::sin(yawRad);
+    const float rightX = -std::sin(yawRad);
+    const float rightZ = std::cos(yawRad);
 
     float forward = 0.0f;
     float strafe = 0.0f;
@@ -180,40 +181,40 @@ void Camera::update(GLFWwindow* window, float deltaTime)
     if (Input::isDown(GLFW_KEY_S)) forward -= 1.0f;
     if (Input::isDown(GLFW_KEY_D)) strafe += 1.0f;
     if (Input::isDown(GLFW_KEY_A)) strafe -= 1.0f;
-    if (Input::isDown(GLFW_KEY_Q)) lift += 1.0f;
-    if (Input::isDown(GLFW_KEY_E)) lift -= 1.0f;
+    if (Input::isDown(GLFW_KEY_Q)) lift += 1.0f;   // up
+    if (Input::isDown(GLFW_KEY_E)) lift -= 1.0f;   // down
 
-    // Normalize so diagonal movement isn't faster
-    const float planarLength = std::sqrt(forward * forward + strafe * strafe);
-    if (planarLength > 1.0f)
+    // Build the wish direction, then normalize so diagonals aren't faster
+    float dirX = fwdX * forward + rightX * strafe;
+    float dirY = lift;
+    float dirZ = fwdZ * forward + rightZ * strafe;
+
+    const float length = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+    if (length > 1.0f)
     {
-        forward /= planarLength;
-        strafe /= planarLength;
+        dirX /= length;
+        dirY /= length;
+        dirZ /= length;
     }
 
-    // Target velocity in world space
-    const float targetX = (forwardX * forward - forwardZ * strafe) * MoveSpeed;
-    const float targetZ = (forwardZ * forward + forwardX * strafe) * MoveSpeed;
-    const float targetY = lift * MoveSpeed;
+    float speed = MoveSpeed;
+    if (Input::isDown(GLFW_KEY_LEFT_SHIFT))   speed *= SprintMultiplier;
+    if (Input::isDown(GLFW_KEY_LEFT_CONTROL)) speed *= SlowMultiplier;
 
-    // Ease toward the target velocity (smooth start and stop)
-    const float moveBlend = 1.0f - std::exp(-MoveResponsiveness * deltaTime);
-    velocity[0] += (targetX - velocity[0]) * moveBlend;
-    velocity[1] += (targetY - velocity[1]) * moveBlend;
-    velocity[2] += (targetZ - velocity[2]) * moveBlend;
+    // Ease toward target velocity (smooth start and stop)
+    const float blend = 1.0f - std::exp(-MoveResponsiveness * deltaTime);
+    velocity_[0] += (dirX * speed - velocity_[0]) * blend;
+    velocity_[1] += (dirY * speed - velocity_[1]) * blend;
+    velocity_[2] += (dirZ * speed - velocity_[2]) * blend;
 
-    // Snap tiny leftovers to zero
-    for (float& v : velocity)
+    for (float& v : velocity_)
     {
-        if (std::fabs(v) < 0.001f)
-        {
-            v = 0.0f;
-        }
+        if (std::fabs(v) < 0.001f) v = 0.0f;
     }
 
-    position_[0] += velocity[0] * deltaTime;
-    position_[1] += velocity[1] * deltaTime;
-    position_[2] += velocity[2] * deltaTime;
+    position_[0] += velocity_[0] * deltaTime;
+    position_[1] += velocity_[1] * deltaTime;
+    position_[2] += velocity_[2] * deltaTime;
 
     if (Input::wasPressed(GLFW_KEY_R))
     {
@@ -223,22 +224,27 @@ void Camera::update(GLFWwindow* window, float deltaTime)
 
 void Camera::onMouseMove(double xPosition, double yPosition)
 {
+    const double dx = xPosition - lastMouseX_;
+    const double dy = lastMouseY_ - yPosition;
+    lastMouseX_ = xPosition;
+    lastMouseY_ = yPosition;
+
+    // Only look around while the mouse is captured
+    if (!cursorCaptured)
+    {
+        firstMouse_ = true;
+        return;
+    }
+
     if (firstMouse_)
     {
-        lastMouseX_ = xPosition;
-        lastMouseY_ = yPosition;
         firstMouse_ = false;
         return;
     }
 
-    const float xOffset = static_cast<float>(xPosition - lastMouseX_) * MouseSensitivity;
-    const float yOffset = static_cast<float>(lastMouseY_ - yPosition) * MouseSensitivity;
-    lastMouseX_ = xPosition;
-    lastMouseY_ = yPosition;
-
-    // Queue the movement; update() applies it smoothly
-    pendingYaw += xOffset;
-    pendingPitch += yOffset;
+    // Applied immediately: no mouse lag, feels like a real game
+    targetYaw_ += static_cast<float>(dx) * MouseSensitivity;
+    targetPitch_ = clampPitch(targetPitch_ + static_cast<float>(dy) * MouseSensitivity);
 }
 
 void Camera::applyProjection(int width, int height) const

@@ -3,8 +3,18 @@
 class Tractor
 {
 public:
+    enum class Color
+    {
+        Red,
+        Green,
+        Blue,
+        Brown
+    };
+
     void update(float deltaTime);
     void drawTractor() const;
+    void updateRoad(float deltaTime, float& z);
+    void drawRoadTractor(float z, Color color) const;
 
 private:
     void drawBody() const;
@@ -21,7 +31,9 @@ private:
     void drawSeat() const;
     void drawSteeringWheel() const;
     void drawRearHitch() const;
+    void setBodyColor(float red, float green, float blue) const;
 
-    float position_[3]{-4.0f, 0.0f, 13.0f};
+    mutable float position_[3]{-4.0f, 0.0f, 13.0f};
     float wheelRotation_ = 0.0f;
+    mutable Color displayColor_ = Color::Red;
 };

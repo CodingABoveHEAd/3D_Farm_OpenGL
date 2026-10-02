@@ -27,6 +27,9 @@ bool Application::initialize(int width, int height, const char* title)
     }
 
     glfwMakeContextCurrent(window_);
+    // Do not cap rendering at the monitor refresh rate. This keeps camera
+    // input responsive on systems where the scene can render faster.
+    glfwSwapInterval(0);
     glfwSetWindowUserPointer(window_, this);
     glfwSetFramebufferSizeCallback(window_, framebufferSizeCallback);
     glfwSetCursorPosCallback(window_, cursorPositionCallback);
@@ -54,6 +57,9 @@ void Application::run()
         const float deltaTime = std::min(static_cast<float>(currentTime - previousTime_), 0.1f);
         previousTime_ = currentTime;
 
+        // Process mouse and keyboard events before sampling input so movement
+        // responds in the same frame instead of one frame late.
+        glfwPollEvents();
         Input::update(window_);
         if (Input::wasPressed(GLFW_KEY_ESCAPE))
         {
@@ -66,7 +72,6 @@ void Application::run()
         renderFrame(deltaTime);
 
         glfwSwapBuffers(window_);
-        glfwPollEvents();
     }
 }
 

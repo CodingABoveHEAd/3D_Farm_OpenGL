@@ -13,6 +13,12 @@ void Animation::update(float dt)
     {
         cloudOffset_ = -28.0f;
     }
+
+    waterTime_ += dt;
+    if (waterTime_ > 1000.0f)
+    {
+        waterTime_ -= 1000.0f;
+    }
 }
 
 void Animation::changeWindmillSpeed(float delta)

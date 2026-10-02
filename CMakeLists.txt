@@ -18,6 +18,9 @@ add_executable(Animated3DFarmScene
     src/graphics/Primitives.cpp
     src/objects/Farmhouse.cpp
     src/objects/Animals.cpp
+    src/objects/Barn.cpp
+    src/objects/Farmer.cpp
+    src/objects/Pond.cpp
     src/objects/Vegetation.cpp
     src/objects/Tractor.cpp
     src/objects/windmill.cpp
