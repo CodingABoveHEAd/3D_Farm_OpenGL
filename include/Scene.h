@@ -7,6 +7,7 @@
 #include "objects/Barn.h"
 #include "objects/Farmer.h"
 #include "objects/Pond.h"
+#include "objects/PowerSubstation.h"
 #include "objects/Tractor.h"
 #include "objects/Windmill.h"
 #include "objects/cloud.h"
@@ -35,6 +36,7 @@ private:
         float houseOffsetX;
         float houseOffsetZ;
         float rotation;
+        int chickenCount = 0;
     };
 
     void renderGround() const;
@@ -42,6 +44,8 @@ private:
     void renderPonds() const;
     void renderFarmers() const;
     void renderRoadTractors() const;
+    void renderCropWorkers() const;
+    void renderScatteredTrees() const;
     void renderBarns() const;
     void renderFarm(float x, float z, float scale, const FarmLayout& layout) const;
     void renderCropField() const;
@@ -63,6 +67,7 @@ private:
     Farmhouse farmhouse_;
     Tractor tractor_;
     std::array<Farmer, 6> farmers_;
+    std::array<Farmer, 12> cropWorkers_;
     std::array<bool, 6> farmerTrafficActive_{};
     std::array<float, 6> farmerTrafficTimers_{};
     std::array<FarmLayout, 12> farmLayouts_;

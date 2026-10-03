@@ -38,6 +38,7 @@ $sourceFiles = @(
     "src\objects\Barn.cpp",
     "src\objects\Farmer.cpp",
     "src\objects\Pond.cpp",
+    "src\objects\PowerSubstation.cpp",
     "src\objects\Vegetation.cpp",
     "src\objects\Tractor.cpp",
     "src\objects\windmill.cpp",

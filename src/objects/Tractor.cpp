@@ -171,9 +171,9 @@ void Tractor::update(float deltaTime)
 void Tractor::updateRoad(float deltaTime, float& z)
 {
     z += 5.5f * deltaTime;
-    if (z > 78.0f)
+    if (z > 108.0f)
     {
-        z = -78.0f;
+        z = -108.0f;
     }
 }
 
@@ -187,7 +187,7 @@ void Tractor::drawRoadTractor(float z, Color color) const
     position_[1] = 0.0f;
     position_[2] = z;
     glPushMatrix();
-    glScalef(0.72f, 0.72f, 0.72f);
+    glScalef(1.00f, 1.00f, 1.00f);
     drawTractor();
     glPopMatrix();
     position_[0] = oldX;

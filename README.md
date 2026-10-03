@@ -14,6 +14,8 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - A 3D ground plane and verification grid
 - A reference cube rendered with a model transformation
 - Mouse-look camera rotation
+- Fast smooth camera movement with WASD and Q/E vertical controls
+- Extended terrain, road, and utility lines for a fake infinite-world horizon
 - Phase 2 farm ground, crop region, and boundary fence
 - Phase 3 low-polygon farmhouse built from OpenGL primitives
 - Phase 4 reusable trees and repeated crop instances
@@ -23,10 +25,17 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - Static grazing cows built from low-polygon primitives
 - Twelve transformed copies of the complete farm arranged along a central road
 - Animated farmers walking only along the central road
+- A dense sky field of enlarged drifting clouds distributed across the horizon
+- A rural electrical substation with fenced transformers and sagging power lines
+- Utility poles and sagging power lines running along both sides of the main road
 - Per-farm layout variation with different tree, animal, tractor, and windmill arrangements
+- Very dense, enlarged forest belts and clusters throughout the complete open world while keeping the road clear
+- Very dense world-wide tree scattering includes roadside belts while landmark and farm footprints remain clear
 - Detailed red, green, blue, and brown tractors circulating on the central road
 - Probabilistic, independently staggered road traffic arrivals
 - Detailed rural barns with roofs, doors, beams, hay, fences, and equipment
+- Enlarged world objects and landmarks for a fuller visual composition
+- Farmers tending the crop rows with repeated walking and working motions
 - Ponds with animated water, natural edges, reeds, rocks, grass, and a wooden bridge
 
 ## Phase 2 Environment
@@ -72,7 +81,9 @@ The complete existing farm layout is rendered twelve times without changing the
 farmhouse, tractor, windmill, vegetation, animal, fence, or rock definitions.
 Each copy uses the same geometry and colors under a uniform world transform.
 The copies are arranged in six rows on both sides of a central road, and the
-ground is expanded to provide room for the full layout.
+ground is expanded to provide room for the full layout. The farms use enlarged
+uniform transforms and wider row spacing so neighboring farms have more room
+around their fences, crops, and equipment.
 
 ## Farmers
 
@@ -109,6 +120,11 @@ Four rural barns are placed around the outer farm areas. Each barn is built
 hierarchically from a large body, two sloped roof slabs, large front doors, a
 side door, windows, structural beams, hay bales, and small nearby equipment.
 Several barns also have their own surrounding fence.
+
+Each farm also has a crop worker placed inside its field. Crop workers move
+between nearby crop rows, pause their walking, and continue with slower
+working motions so they appear to tend the plants rather than travel on the
+road.
 
 ## Ponds and Wooden Bridge
 

@@ -9,7 +9,7 @@
 namespace {
 constexpr float Pi = 3.14159265358979323846f;
 
-constexpr float MoveSpeed = 11.0f;          // units per second
+constexpr float MoveSpeed = 90.0f;          // units per second
 constexpr float SprintMultiplier = 3.0f;    // hold Left Shift
 constexpr float SlowMultiplier = 0.3f;      // hold Left Ctrl
 constexpr float MoveResponsiveness = 20.0f; // smooth acceleration and braking
@@ -251,7 +251,7 @@ void Camera::applyProjection(int width, int height) const
 {
     const float aspect = height > 0 ? static_cast<float>(width) / static_cast<float>(height) : 1.0f;
     const float nearPlane = 0.1f;
-    const float farPlane = 200.0f;
+    const float farPlane = 1000.0f;
     const float top = nearPlane * std::tan(fieldOfView_ * Pi / 360.0f);
     const float right = top * aspect;
 

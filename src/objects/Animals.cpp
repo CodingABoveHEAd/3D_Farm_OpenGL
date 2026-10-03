@@ -3,6 +3,7 @@
 #include "graphics/Primitives.h"
 
 #include <GLFW/glfw3.h>
+#include <algorithm>
 #include <cmath>
 #include <initializer_list>
 
@@ -27,6 +28,35 @@ constexpr Color kBlack    {0.03f, 0.02f, 0.02f};
 constexpr Color kTag      {0.95f, 0.80f, 0.10f};
 constexpr Color kGrass    {0.28f, 0.60f, 0.16f};
 constexpr Color kShadow   {0.09f, 0.13f, 0.07f};
+
+// Chicken palette
+constexpr Color kComb      {0.80f, 0.08f, 0.07f};
+constexpr Color kWattle    {0.86f, 0.14f, 0.12f};
+constexpr Color kBeak      {0.93f, 0.66f, 0.18f};
+constexpr Color kBeakDark  {0.62f, 0.42f, 0.12f};
+constexpr Color kLobe      {0.93f, 0.92f, 0.88f};
+constexpr Color kIris      {0.95f, 0.50f, 0.05f};
+constexpr Color kShank     {0.86f, 0.74f, 0.32f};
+constexpr Color kShankDark {0.66f, 0.54f, 0.22f};
+constexpr Color kClaw      {0.45f, 0.38f, 0.25f};
+
+struct Plumage { Color body, breast, saddle, hackle, wing, wingTip, tail, tailSheen; };
+
+constexpr Plumage kHen {
+    {0.60f, 0.38f, 0.20f}, {0.78f, 0.56f, 0.32f}, {0.52f, 0.32f, 0.16f}, {0.70f, 0.45f, 0.22f},
+    {0.50f, 0.30f, 0.15f}, {0.25f, 0.16f, 0.09f}, {0.18f, 0.12f, 0.08f}, {0.22f, 0.16f, 0.10f}};
+constexpr Plumage kRooster {
+    {0.62f, 0.20f, 0.08f}, {0.10f, 0.07f, 0.06f}, {0.88f, 0.55f, 0.14f}, {0.92f, 0.62f, 0.16f},
+    {0.55f, 0.18f, 0.07f}, {0.10f, 0.07f, 0.05f}, {0.04f, 0.10f, 0.08f}, {0.10f, 0.42f, 0.32f}};
+
+constexpr float kRadToDeg = 57.2957795f;
+
+float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
+float smooth(float v)  { v = clamp01(v); return v * v * (3.0f - 2.0f * v); }
+Color mix(const Color& a, const Color& b, float t)
+{
+    return { a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t };
+}
 
 // Fake shading: multiply a color by a factor (<1 darker, >1 lighter).
 Color shade(const Color& c, float f)
@@ -190,6 +220,225 @@ void drawTail(float sway)
     glPopMatrix();
 }
 
+// ---------------------------------------------------------------------------
+// Chicken
+// ---------------------------------------------------------------------------
+
+struct ChickenPose {
+    float legSwing;    // hip swing in degrees (left leg; right is mirrored)
+    float bodyBob;     // small vertical bob
+    float bodyPitch;   // forward lean about the hips (pecking)
+    float headPeck;    // neck rotation relative to the body
+    float headThrust;  // head pushed forward while walking
+    float beakOpen;    // degrees
+    float blink;       // 0..1
+    float wingLift;    // degrees
+    float tailSway;    // degrees
+    float breath;      // ~1.0
+};
+
+void drawChickenLeg(const Plumage& p, float side, float swing, bool rooster)
+{
+    glPushMatrix();
+    glTranslatef(0.20f * side, 0.66f, 0.04f);
+    glRotatef(swing, 1.0f, 0.0f, 0.0f);
+
+    // Feathered thigh and "trouser" feathers over the hock
+    drawEllipsoid(p.body,              {0.0f, -0.02f, 0.00f}, {0.16f, 0.24f, 0.22f}, -10.0f);
+    drawEllipsoid(shade(p.body, 0.90f), {0.0f, -0.20f, 0.05f}, {0.10f, 0.12f, 0.12f}, 15.0f, 0, 0, 10, 8);
+
+    // Scaly shank with scute bands
+    drawCyl(kShank, {0.0f, -0.64f, 0.0f}, 0.032f, 0.50f, 0.0f, 0.0f, 8);
+    for (int i = 0; i < 4; ++i)
+        drawBox(kShankDark, {0.0f, -0.24f - i * 0.10f, 0.0f}, {0.07f, 0.012f, 0.07f});
+    if (rooster)  // spur
+        drawEllipsoid(kClaw, {0.0f, -0.42f, 0.045f}, {0.016f, 0.045f, 0.016f}, 40.0f, 0, 0, 6, 4);
+
+    // Foot stays roughly flat on the ground
+    glTranslatef(0.0f, -0.64f, 0.0f);
+    glRotatef(-swing * 0.75f, 1.0f, 0.0f, 0.0f);
+    drawEllipsoid(kShankDark, {0.0f, 0.0f, 0.0f}, {0.045f, 0.03f, 0.05f}, 0, 0, 0, 8, 6);
+
+    const float toeAngles[3] = {-30.0f, 0.0f, 30.0f};
+    for (float a : toeAngles) {
+        glPushMatrix();
+        glRotatef(a, 0.0f, 1.0f, 0.0f);
+        drawBox(kShank, {0.0f, 0.0f, -0.095f}, {0.028f, 0.022f, 0.19f});
+        drawEllipsoid(kClaw, {0.0f, -0.002f, -0.195f}, {0.015f, 0.013f, 0.035f}, 0, 0, 0, 6, 4);
+        glPopMatrix();
+    }
+    drawBox(kShank, {0.0f, 0.0f, 0.05f}, {0.026f, 0.022f, 0.10f});                          // hind toe
+    drawEllipsoid(kClaw, {0.0f, -0.002f, 0.105f}, {0.014f, 0.012f, 0.03f}, 0, 0, 0, 6, 4);
+    glPopMatrix();
+}
+
+// Fan of tail feathers, each built from segments along a curved arc.
+void drawTailFan(const Color& c, const Color& sheen, int count, float spread,
+                 float radius, float arc, int segs, float width, float sway)
+{
+    glPushMatrix();
+    glTranslatef(0.0f, 0.98f, 0.60f);
+    const float step = radius * arc / segs;
+    for (int f = 0; f < count; ++f) {
+        const float k = (count > 1) ? (static_cast<float>(f) / (count - 1)) * 2.0f - 1.0f : 0.0f;
+        glPushMatrix();
+        glRotatef(k * spread + sway, 0.0f, 0.0f, 1.0f);
+        for (int i = 0; i < segs; ++i) {
+            const float u = (i + 0.5f) / segs;
+            const float a = u * arc;
+            const Color col = shade(mix(c, sheen, u), (i % 2) ? 1.0f : 0.88f);
+            drawEllipsoid(col,
+                          {0.0f, radius * std::sin(a), radius * (1.0f - std::cos(a)) + f * 0.004f},
+                          {width * (1.0f - 0.35f * u), step * 0.70f, 0.045f},
+                          a * kRadToDeg, 0.0f, 0.0f, 6, 4);
+        }
+        glPopMatrix();
+    }
+    glPopMatrix();
+}
+
+void drawChickenWing(const Plumage& p, float side, float lift)
+{
+    glPushMatrix();
+    glTranslatef(0.42f * side, 1.06f, -0.14f);
+    glRotatef(lift * side, 0.0f, 0.0f, 1.0f);
+    glRotatef(8.0f, 1.0f, 0.0f, 0.0f);
+
+    drawEllipsoid(p.wing, {0.04f * side, -0.20f, 0.14f}, {0.08f, 0.30f, 0.40f}, 10.0f, 0, 0, 14, 10);
+    for (int i = 0; i < 3; ++i)   // covert scallops
+        drawEllipsoid(shade(p.wing, (i % 2) ? 1.10f : 0.92f),
+                      {0.09f * side, -0.10f - i * 0.10f, 0.02f + i * 0.08f},
+                      {0.035f, 0.08f, 0.12f}, 10.0f, 0, 0, 8, 6);
+    for (int i = 0; i < 4; ++i)   // primaries trailing back
+        drawEllipsoid((i % 2) ? p.wingTip : shade(p.wingTip, 1.25f),
+                      {0.07f * side, -0.30f - i * 0.015f, 0.30f + i * 0.09f},
+                      {0.04f, 0.09f, 0.16f}, 14.0f + i * 3.0f, 0, 0, 8, 6);
+    glPopMatrix();
+}
+
+void drawChickenBody(const Plumage& p, bool rooster, float breath)
+{
+    drawEllipsoid(p.body,   {0.0f, 0.88f,  0.06f}, {0.48f * breath, 0.44f * breath, 0.66f}, -6.0f, 0, 0, 18, 14);
+    drawEllipsoid(p.breast, {0.0f, 0.86f, -0.36f}, {0.40f * breath, 0.42f * breath, 0.34f}, 0, 0, 0, 16, 12);
+    drawEllipsoid(shade(p.breast, 0.88f), {0.0f, 0.62f, 0.04f}, {0.40f, 0.22f, 0.52f}, 0, 0, 0, 14, 10);
+    drawEllipsoid(p.saddle, {0.0f, 1.08f,  0.32f}, {0.34f, 0.20f, 0.40f}, -12.0f, 0, 0, 14, 10);
+    drawEllipsoid(p.saddle, {0.0f, 1.12f, -0.16f}, {0.30f, 0.14f, 0.28f}, 0, 0, 0, 12, 8);
+    drawEllipsoid(shade(p.body, 0.95f), {0.0f, 0.84f, 0.64f}, {0.30f, 0.28f, 0.26f}, 0, 0, 0, 12, 10);
+
+    if (rooster)  // long saddle hackles draped over the flanks
+        for (float s : {-1.0f, 1.0f})
+            drawEllipsoid(p.saddle, {0.30f * s, 0.95f, 0.40f}, {0.08f, 0.20f, 0.30f}, 0, 0, 20.0f * s, 10, 8);
+
+    // Overlapping feather scales that follow the flank contour
+    for (float s : {-1.0f, 1.0f}) {
+        for (int i = 0; i < 6; ++i) {
+            const float dz = -0.45f + i * 0.17f;
+            const float k  = std::sqrt(std::max(0.0f, 1.0f - (dz / 0.66f) * (dz / 0.66f)));
+            for (int j = 0; j < 3; ++j) {
+                const float phi = (-25.0f + j * 30.0f) / kRadToDeg;
+                const Color base = (i < 2) ? p.breast : p.body;
+                drawEllipsoid(shade(base, ((i + j) % 2) ? 0.90f : 1.06f),
+                              {s * 0.48f * std::cos(phi) * k * 0.98f,
+                               0.88f + 0.44f * std::sin(phi) * k,
+                               0.06f + dz},
+                              {0.035f, 0.075f, 0.12f},
+                              0.0f, 0.0f, s * phi * kRadToDeg, 8, 6);
+            }
+        }
+    }
+}
+
+void drawChickenHead(const Plumage& p, bool rooster, const ChickenPose& k)
+{
+    glPushMatrix();
+    glTranslatef(0.0f, 0.0f, -k.headThrust);
+    glTranslatef(0.0f, 1.00f, -0.45f);          // pivot at the base of the neck
+    glRotatef(-k.headPeck, 1.0f, 0.0f, 0.0f);
+    glTranslatef(0.0f, -1.00f, 0.45f);
+
+    // S-curved neck
+    drawEllipsoid(p.hackle,             {0.0f, 1.12f, -0.58f}, {0.20f, 0.26f, 0.20f}, -15.0f, 0, 0, 12, 10);
+    drawEllipsoid(shade(p.hackle, 0.95f), {0.0f, 1.34f, -0.66f}, {0.14f, 0.22f, 0.14f}, -12.0f, 0, 0, 12, 10);
+
+    // Hackle collar
+    const float hLen = rooster ? 0.20f : 0.15f;
+    for (int i = 0; i < 10; ++i) {
+        const float a = i * 36.0f;
+        const float r = a / kRadToDeg;
+        drawEllipsoid(shade(p.hackle, (i % 2) ? 1.0f : 0.88f),
+                      {0.17f * std::sin(r), 1.06f, -0.58f + 0.17f * std::cos(r)},
+                      {0.065f, hLen, 0.05f}, 30.0f, a, 0.0f, 6, 4);
+    }
+    for (int i = 0; i < 8; ++i) {
+        const float a = i * 45.0f + 20.0f;
+        const float r = a / kRadToDeg;
+        drawEllipsoid(shade(p.hackle, (i % 2) ? 0.92f : 1.05f),
+                      {0.12f * std::sin(r), 1.26f, -0.66f + 0.12f * std::cos(r)},
+                      {0.05f, hLen * 0.75f, 0.04f}, 25.0f, a, 0.0f, 6, 4);
+    }
+
+    // Head, face patch, ear lobes
+    drawEllipsoid(shade(p.hackle, 1.05f), {0.0f, 1.55f, -0.72f}, {0.13f, 0.14f, 0.16f}, 0, 0, 0, 14, 10);
+    for (float s : {-1.0f, 1.0f}) {
+        drawEllipsoid(kComb, {0.098f * s, 1.54f, -0.82f}, {0.03f, 0.065f, 0.07f}, 0, 0, 0, 8, 6);
+        drawEllipsoid(kLobe, {0.122f * s, 1.49f, -0.70f}, {0.02f, 0.04f, 0.04f}, 0, 0, 0, 8, 6);
+    }
+
+    // Eyes with iris, pupil and eyelid
+    for (float s : {-1.0f, 1.0f}) {
+        drawEllipsoid(kIris,  {0.116f * s, 1.57f, -0.78f}, {0.022f, 0.030f, 0.030f}, 0, 0, 0, 8, 6);
+        drawEllipsoid(kBlack, {0.130f * s, 1.57f, -0.78f}, {0.012f, 0.018f, 0.018f}, 0, 0, 0, 6, 4);
+        drawEllipsoid(shade(kComb, 0.8f),
+                      {0.120f * s, 1.595f - 0.025f * k.blink, -0.78f},
+                      {0.026f, 0.020f + 0.022f * k.blink, 0.034f}, 0, 0, 0, 8, 6);
+    }
+
+    // Beak (lower half opens when pecking)
+    drawEllipsoid(kBeak,     {0.0f, 1.52f, -0.90f}, {0.050f, 0.040f, 0.120f}, -10.0f, 0, 0, 10, 8);
+    drawEllipsoid(kBeakDark, {0.0f, 1.505f, -1.00f}, {0.025f, 0.020f, 0.050f}, -14.0f, 0, 0, 8, 6);
+    drawEllipsoid(kBeak,     {0.0f, 1.465f, -0.88f}, {0.040f, 0.025f, 0.090f}, -k.beakOpen, 0, 0, 8, 6);
+
+    // Serrated comb and wattles
+    const int   n    = rooster ? 5 : 3;
+    const float size = rooster ? 1.8f : 1.0f;
+    for (int i = 0; i < n; ++i) {
+        const float h  = 0.5f + 0.5f * std::sin(3.14159f * i / (n - 1));
+        const float sy = 0.035f + h * 0.045f * size;
+        drawEllipsoid(kComb, {0.0f, 1.675f + sy * 0.5f, -0.80f + i * (0.17f / (n - 1))},
+                      {0.020f, sy, 0.035f}, 0, 0, 0, 8, 6);
+    }
+    for (float s : {-1.0f, 1.0f})
+        drawEllipsoid(kWattle, {0.025f * s, 1.39f, -0.86f},
+                      {0.022f, rooster ? 0.08f : 0.045f, 0.03f}, 0, 0, 0, 8, 6);
+
+    glPopMatrix();
+}
+
+void drawChickenModel(const Plumage& p, bool rooster, const ChickenPose& k)
+{
+    drawChickenLeg(p, -1.0f,  k.legSwing, rooster);
+    drawChickenLeg(p,  1.0f, -k.legSwing, rooster);
+
+    glPushMatrix();
+    glTranslatef(0.0f, k.bodyBob, 0.0f);
+    glTranslatef(0.0f, 0.66f, 0.04f);                 // lean about the hips
+    glRotatef(-k.bodyPitch, 1.0f, 0.0f, 0.0f);
+    glTranslatef(0.0f, -0.66f, -0.04f);
+
+    drawChickenBody(p, rooster, k.breath);
+    drawChickenWing(p, -1.0f, k.wingLift);
+    drawChickenWing(p,  1.0f, k.wingLift);
+
+    if (rooster) {
+        drawTailFan(p.tail, p.tailSheen, 5, 24.0f, 0.32f, 1.0f, 4, 0.07f, k.tailSway);
+        drawTailFan(p.tail, p.tailSheen, 3, 14.0f, 0.55f, 1.9f, 8, 0.045f, k.tailSway * 1.4f);
+    } else {
+        drawTailFan(p.tail, p.tailSheen, 5, 16.0f, 0.30f, 0.9f, 4, 0.07f, k.tailSway);
+    }
+
+    drawChickenHead(p, rooster, k);
+    glPopMatrix();
+}
 
 } // namespace
 
@@ -250,6 +499,49 @@ void drawCow(float x, float z, float scale, float rotation)
     drawUdder();
     drawTail(tailSway);
 
+    glPopMatrix();
+}
+
+void drawChicken(float x, float z, float scale, float rotation, bool rooster)
+{
+    const float t    = static_cast<float>(glfwGetTime());
+    const float seed = x * 0.37f + z * 0.19f;
+
+    // Wander on a circle, speeding up and slowing down; legs are driven by
+    // distance travelled, so they stop when the bird stops to forage.
+    constexpr float kWander = 0.55f, kOmega = 0.9f, kRadius = 1.1f;
+    const float amp   = 0.8f * kWander / kOmega;
+    const float ang   = rotation / kRadToDeg + seed + kWander * t + amp * std::sin(kOmega * t + seed);
+    const float speed = 1.0f + 0.8f * std::cos(kOmega * t + seed);       // 0.2 .. 1.8
+
+    const float px  = x + kRadius * std::sin(ang);
+    const float pz  = z + kRadius * std::cos(ang);
+    const float yaw = std::atan2(-std::cos(ang), std::sin(ang)) * kRadToDeg
+                    + 6.0f * std::sin(t * 1.3f + seed);
+
+    const float forage  = smooth((0.6f - speed) / 0.4f);                  // 1 = pecking
+    const float walkAmp = clamp01(speed * 0.9f);
+    const float legPh   = ang * 23.0f;
+    const float pulse   = std::pow(0.5f + 0.5f * std::sin(t * 9.0f + seed * 3.0f), 3.0f) * forage;
+    const float blinkCy = std::fmod(t * 0.37f + seed, 1.0f);
+
+    ChickenPose pose;
+    pose.legSwing   = 24.0f * walkAmp * std::sin(legPh);
+    pose.bodyBob    = 0.015f * walkAmp * std::sin(legPh * 2.0f);
+    pose.bodyPitch  = 8.0f * forage + 20.0f * pulse;
+    pose.headPeck   = 20.0f * forage + 62.0f * pulse;
+    pose.headThrust = 0.06f * walkAmp * std::sin(legPh * 2.0f + 1.0f);
+    pose.beakOpen   = 16.0f * pulse;
+    pose.blink      = (blinkCy < 0.04f) ? 1.0f : 0.0f;
+    pose.wingLift   = 3.0f + 2.5f * walkAmp * std::sin(legPh * 2.0f) + 1.5f * std::sin(t * 0.8f + seed);
+    pose.tailSway   = 4.0f * std::sin(t * 1.7f + seed) + 5.0f * walkAmp * std::sin(legPh);
+    pose.breath     = 1.0f + 0.012f * std::sin(t * 2.1f + seed);
+
+    glPushMatrix();
+    glTranslatef(px, 0.0f, pz);
+    glRotatef(yaw, 0.0f, 1.0f, 0.0f);
+    glScalef(scale, scale, scale);
+    drawChickenModel(rooster ? kRooster : kHen, rooster, pose);
     glPopMatrix();
 }
 

@@ -4,7 +4,8 @@ enum class FarmerRoute
 {
     Road,
     Wander,
-    FarmVisit
+    FarmVisit,
+    CropWork
 };
 
 class Farmer
@@ -32,4 +33,5 @@ private:
     float targetZ_;
     FarmerRoute route_;
     bool visible_ = true;
+    bool workMovingForward_ = true;
 };

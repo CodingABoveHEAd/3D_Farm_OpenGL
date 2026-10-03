@@ -150,6 +150,12 @@ Farmer::Farmer(float x, float z, FarmerRoute route, float speed, float phase)
     {
         targetX_ = x < 0.0f ? -23.0f : 23.0f;
     }
+    else if (route_ == FarmerRoute::CropWork)
+    {
+        targetX_ = x;
+        targetZ_ = z + 1.6f;
+        heading_ = 0.0f;
+    }
 }
 
 void Farmer::update(float deltaTime)
@@ -159,11 +165,31 @@ void Farmer::update(float deltaTime)
     if (route_ == FarmerRoute::Road)
     {
         z_ += speed_ * deltaTime;
-        if (z_ > 72.0f)
+        if (z_ > 108.0f)
         {
-            z_ = -72.0f;
+            z_ = -108.0f;
         }
 
+    }
+    else if (route_ == FarmerRoute::CropWork)
+    {
+        const float dx = targetX_ - x_;
+        const float dz = targetZ_ - z_;
+        const float distance = std::sqrt(dx * dx + dz * dz);
+
+        if (distance < 0.12f)
+        {
+            workMovingForward_ = !workMovingForward_;
+            targetX_ = x_ + (workMovingForward_ ? 1.8f : -1.8f);
+            targetZ_ = z_ + (workMovingForward_ ? 1.4f : -1.4f);
+        }
+        else
+        {
+            heading_ = std::atan2(dx, dz) * 180.0f / Pi;
+            const float step = speed_ * deltaTime;
+            x_ += dx / distance * step;
+            z_ += dz / distance * step;
+        }
     }
     else
     {
@@ -223,6 +249,10 @@ void Farmer::chooseNextWanderTarget()
     if (targetZ_ > 70.0f) targetZ_ = 70.0f;
 }
 
+// Drop-in replacement for Farmer::render() in Farmer.cpp.
+// Everything else in the file stays exactly as it is.
+// Only the CropWork (`working`) behaviour changes; other routes render as before.
+
 void Farmer::render() const
 {
     if (!visible_)
@@ -230,26 +260,50 @@ void Farmer::render() const
         return;
     }
 
-    const float cycle = animationTime_ * 7.0f + phase_;
+    const bool working = route_ == FarmerRoute::CropWork;
+    const float cycle = animationTime_ * (working ? 3.2f : 7.0f) + phase_;
     const float swing = std::sin(cycle) * 28.0f;       // arms (degrees)
     const float legSwing = std::sin(cycle) * 28.0f;    // legs (degrees)
     const float bob = std::fabs(std::sin(cycle)) * 0.04f;
-    const float sway = std::sin(cycle) * 2.5f;
+    const float sway = std::sin(cycle) * (working ? 5.0f : 2.5f);
+
+    // Positive X rotation tips the body toward +Z (the direction the farmer
+    // faces), so a positive angle is a forward bend from the hips.
+    const float workBend = working
+        ? 48.0f + std::sin(cycle * 0.5f) * 6.0f
+        : 0.0f;
+    const float workArmMotion = std::sin(cycle) * 18.0f;        // picking / pulling
+    const float handSweep = std::sin(cycle * 0.5f) * 10.0f;     // gathering sideways
+
+    // Head: counter-rotate against the bend so the face looks down at the
+    // crop row instead of straight at the ground, plus a nod and a look-around.
+    const float headPitch = working
+        ? -workBend * 0.6f + std::sin(cycle * 0.5f + 1.2f) * 8.0f
+        : 0.0f;
+    const float headYaw = working ? std::sin(cycle * 0.35f) * 20.0f : 0.0f;
 
     const RGB shirt = shirtColor(phase_);
 
     glPushMatrix();
     glTranslatef(x_, 0.0f, z_);
     glRotatef(heading_, 0.0f, 1.0f, 0.0f);
-    glScalef(0.65f, 0.65f, 0.65f);
+    glScalef(0.90f, 0.90f, 0.90f);
 
-    // Legs stay planted; everything above the hips bobs and sways.
-    renderLeg(-0.20f, 0.0f, legSwing);
-    renderLeg( 0.20f, 0.0f, -legSwing);
+    // Legs: normal stride when walking, a small shuffle while working the rows.
+    renderLeg(-0.20f, 0.0f, working ? legSwing * 0.3f : legSwing);
+    renderLeg( 0.20f, 0.0f, working ? -legSwing * 0.3f : -legSwing);
 
     glPushMatrix();
     glTranslatef(0.0f, bob, 0.0f);
     glRotatef(sway, 0.0f, 1.0f, 0.0f);
+    if (working)
+    {
+        // Bend the upper body forward from the hips so the farmer reaches
+        // down into the crop rows.
+        glTranslatef(0.0f, 1.32f, 0.0f);
+        glRotatef(workBend, 1.0f, 0.0f, 0.0f);
+        glTranslatef(0.0f, -1.32f, 0.0f);
+    }
 
     // Pelvis and belt
     drawEllipsoid(kDenim, 0.0f, 1.32f, 0.0f, 0.40f, 0.22f, 0.26f);
@@ -273,10 +327,42 @@ void Farmer::render() const
     }
     drawBox(kDenim, 0.0f, 1.80f, -0.255f, 0.52f, 0.50f, 0.05f);        // back panel
 
+    // Head pivots at the neck.
+    glPushMatrix();
+    glTranslatef(0.0f, 2.36f, 0.0f);
+    glRotatef(headYaw, 0.0f, 1.0f, 0.0f);
+    glRotatef(headPitch, 1.0f, 0.0f, 0.0f);
+    glTranslatef(0.0f, -2.36f, 0.0f);
     drawHead(phase_);
+    glPopMatrix();
 
-    renderArm(-0.54f, 2.18f, -swing);
-    renderArm( 0.54f, 2.18,  swing);
+    if (working)
+    {
+        // The upper body is already bent, so arm angles are relative to the
+        // torso. Subtracting the bend keeps the arms hanging down into the
+        // crops; the alternating motion is the picking/pulling action and the
+        // shoulder yaw sweeps the hands inward as if gathering plants.
+        const float armBase = -workBend - 10.0f;
+
+        glPushMatrix();
+        glTranslatef(-0.54f, 2.18f, 0.0f);
+        glRotatef(handSweep, 0.0f, 1.0f, 0.0f);
+        glTranslatef(0.54f, -2.18f, 0.0f);
+        renderArm(-0.54f, 2.18f, armBase - workArmMotion);
+        glPopMatrix();
+
+        glPushMatrix();
+        glTranslatef(0.54f, 2.18f, 0.0f);
+        glRotatef(-handSweep, 0.0f, 1.0f, 0.0f);
+        glTranslatef(-0.54f, -2.18f, 0.0f);
+        renderArm( 0.54f, 2.18f, armBase + workArmMotion);
+        glPopMatrix();
+    }
+    else
+    {
+        renderArm(-0.54f, 2.18f, -swing);
+        renderArm( 0.54f, 2.18f,  swing);
+    }
 
     glPopMatrix();
     glPopMatrix();
