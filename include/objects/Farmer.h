@@ -1,14 +1,37 @@
 #pragma once
 
-namespace Farmer {
+enum class FarmerRoute
+{
+    Road,
+    Wander,
+    FarmVisit,
+    CropWork
+};
 
-// Activity types for different animation states
-enum Activity { Standing, Walking, Working };
+class Farmer
+{
+public:
+    Farmer(float x, float z, FarmerRoute route, float speed, float phase);
 
-// Draw a farmer at (x, z) facing `heading` degrees (around Y).
-// `time` drives the animation; `activity` selects the motion style.
-// `scale` defaults to 1.0.
-void drawFarmer(float x, float z, float heading, float time,
-                Activity activity = Standing, float scale = 1.0f);
+    void update(float deltaTime);
+    void render() const;
+    void setVisible(bool visible);
+    void setRoadPosition(float z);
 
-} // namespace Farmer
+private:
+    void chooseNextWanderTarget();
+    void renderLeg(float x, float z, float swing) const;
+    void renderArm(float x, float z, float swing) const;
+
+    float x_;
+    float z_;
+    float heading_;
+    float speed_;
+    float phase_;
+    float animationTime_ = 0.0f;
+    float targetX_;
+    float targetZ_;
+    FarmerRoute route_;
+    bool visible_ = true;
+    bool workMovingForward_ = true;
+};

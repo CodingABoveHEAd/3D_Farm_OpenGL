@@ -11,23 +11,20 @@ add_executable(Animated3DFarmScene
     src/main.cpp
     src/Application.cpp
     src/Camera.cpp
-    src/farmworld.cpp
     src/Input.cpp
     src/Scene.cpp
     src/Animation.cpp
     src/Lighting.cpp
     src/graphics/Primitives.cpp
-    src/graphics/Shadow.cpp
-    src/graphics/TextureManager.cpp
     src/objects/Farmhouse.cpp
-    src/objects/Barn.cpp
     src/objects/Animals.cpp
+    src/objects/Barn.cpp
+    src/objects/Farmer.cpp
+    src/objects/Pond.cpp
+    src/objects/PowerSubstation.cpp
     src/objects/Vegetation.cpp
     src/objects/Tractor.cpp
     src/objects/windmill.cpp
-    src/objects/Farmer.cpp
-    src/objects/PowerPlant.cpp
-    src/objects/Bridge.cpp
     src/objects/sky.cpp
     src/objects/cloud.cpp
 )

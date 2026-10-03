@@ -1,30 +1,95 @@
 #include "Scene.h"
 
-#include "Camera.h"
 #include "Input.h"
 #include "graphics/Primitives.h"
-#include "graphics/Shadow.h"
-#include "objects/Bridge.h"
-#include "objects/PowerPlant.h"
 #include "objects/Vegetation.h"
 
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
+#include <random>
 
-namespace {
-constexpr float Pi = 3.14159265358979323846f;
+namespace
+{
+float randomTrafficTime(std::mt19937& rng, float minimum, float maximum)
+{
+    std::uniform_real_distribution<float> distribution(minimum, maximum);
+    return distribution(rng);
+}
+
+float treeScatterHash(int x, int z)
+{
+    const float value = std::sin(
+        static_cast<float>(x) * 12.9898f +
+        static_cast<float>(z) * 78.233f) * 43758.5453f;
+    return value - std::floor(value);
+}
 }
 
 Scene::Scene()
+    : farmers_{
+          Farmer(-2.0f, -55.0f, FarmerRoute::Road, 3.0f, 0.0f),
+          Farmer(2.0f, -45.0f, FarmerRoute::Road, 2.4f, 1.2f),
+          Farmer(-2.0f, -32.0f, FarmerRoute::Road, 2.7f, 2.1f),
+          Farmer(2.0f, -18.0f, FarmerRoute::Road, 2.2f, 2.8f),
+          Farmer(-2.0f, -4.0f, FarmerRoute::Road, 2.8f, 3.5f),
+          Farmer(2.0f, 24.0f, FarmerRoute::Road, 2.5f, 4.2f)},
+      cropWorkers_{
+          Farmer(-5.5f, -9.0f, FarmerRoute::CropWork, 1.0f, 0.3f),
+          Farmer(4.5f, -8.0f, FarmerRoute::CropWork, 0.9f, 1.1f),
+          Farmer(-3.0f, -7.0f, FarmerRoute::CropWork, 1.1f, 1.9f),
+          Farmer(5.0f, -6.0f, FarmerRoute::CropWork, 0.8f, 2.7f),
+          Farmer(-6.0f, -8.0f, FarmerRoute::CropWork, 1.0f, 3.5f),
+          Farmer(3.5f, -9.0f, FarmerRoute::CropWork, 0.9f, 4.3f),
+          Farmer(-4.5f, -6.5f, FarmerRoute::CropWork, 1.1f, 5.1f),
+          Farmer(5.5f, -8.5f, FarmerRoute::CropWork, 0.8f, 5.9f),
+          Farmer(-5.0f, -7.5f, FarmerRoute::CropWork, 1.0f, 6.7f),
+          Farmer(4.0f, -6.0f, FarmerRoute::CropWork, 0.9f, 7.5f),
+          Farmer(-3.5f, -8.5f, FarmerRoute::CropWork, 1.1f, 8.3f),
+          Farmer(5.0f, -7.0f, FarmerRoute::CropWork, 0.8f, 9.1f)},
+      farmLayouts_{
+          FarmLayout{2, 1, true, true, -1.2f, 0.4f, 1.0f, 0.5f, -2.0f},
+          FarmLayout{5, 2, false, true, 1.1f, -0.6f, -0.8f, 0.3f, 3.0f},
+          FarmLayout{3, 0, true, false, -0.5f, 1.0f, 0.7f, -0.5f, -4.0f},
+          FarmLayout{4, 2, false, true, 0.8f, 0.7f, -1.0f, -0.2f, 2.0f},
+          FarmLayout{2, 1, false, false, -1.0f, -0.8f, 0.5f, 0.6f, -3.0f},
+          FarmLayout{5, 0, true, true, 0.6f, 0.3f, -0.6f, -0.4f, 4.0f},
+          FarmLayout{3, 2, false, true, -0.8f, 0.8f, 1.1f, 0.2f, -2.5f},
+          FarmLayout{4, 1, true, false, 1.0f, -0.4f, -0.5f, 0.5f, 3.5f},
+          FarmLayout{2, 2, false, true, -0.7f, -0.5f, 0.8f, -0.3f, -3.5f},
+          FarmLayout{5, 0, true, true, 0.5f, 0.9f, -0.9f, 0.4f, 2.5f},
+          FarmLayout{3, 1, false, false, -1.1f, 0.2f, 0.6f, -0.6f, -1.5f},
+          FarmLayout{4, 2, true, true, 0.9f, -0.9f, -0.7f, 0.1f, 1.5f}},
+      roadTractorZ_{-60.0f, -20.0f, 22.0f, 60.0f},
+      trafficRng_(std::random_device{}())
 {
-    Cloud::initField();
-}
+    std::uniform_int_distribution<int> chickenCountDistribution(0, 3);
+    for (FarmLayout& layout : farmLayouts_)
+    {
+        layout.chickenCount = chickenCountDistribution(trafficRng_);
+    }
 
-void Scene::toggleGate()
-{
-    gateTarget_ = (gateTarget_ > 45.0f) ? 0.0f : 90.0f;
+    for (std::size_t index = 0; index < farmers_.size(); ++index)
+    {
+        farmerTrafficActive_[index] = index % 3 != 0;
+        farmerTrafficTimers_[index] = randomTrafficTime(
+            trafficRng_,
+            farmerTrafficActive_[index] ? 18.0f : 2.0f,
+            farmerTrafficActive_[index] ? 42.0f : 10.0f);
+        farmers_[index].setVisible(farmerTrafficActive_[index]);
+    }
+
+    for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
+    {
+        tractorTrafficActive_[index] = index % 2 == 0;
+        tractorTrafficTimers_[index] = randomTrafficTime(
+            trafficRng_,
+            tractorTrafficActive_[index] ? 14.0f : 3.0f,
+            tractorTrafficActive_[index] ? 32.0f : 12.0f);
+    }
+
+    Cloud::initField();
 }
 
 void Scene::handleInput()
@@ -37,14 +102,6 @@ void Scene::handleInput()
     {
         animation_.togglePaused();
     }
-    if (Input::wasPressed(GLFW_KEY_G))
-    {
-        toggleGate();
-    }
-    if (Input::wasPressed(GLFW_KEY_R))
-    {
-        animation_.changeWindmillSpeed(30.0f);
-    }
     if (Input::wasPressed(GLFW_KEY_EQUAL) || Input::wasPressed(GLFW_KEY_KP_ADD))
     {
         animation_.changeWindmillSpeed(15.0f);
@@ -55,134 +112,397 @@ void Scene::handleInput()
     }
 }
 
-void Scene::update(float deltaTime, Camera& camera)
+void Scene::update(float deltaTime)
 {
-    totalTime_ += deltaTime;
     animation_.update(deltaTime);
     tractor_.update(deltaTime);
+    for (std::size_t index = 0; index < farmers_.size(); ++index)
+    {
+        farmerTrafficTimers_[index] -= deltaTime;
+        if (farmerTrafficTimers_[index] <= 0.0f)
+        {
+            farmerTrafficActive_[index] = !farmerTrafficActive_[index];
+            farmers_[index].setVisible(farmerTrafficActive_[index]);
+            farmerTrafficTimers_[index] = randomTrafficTime(
+                trafficRng_,
+                farmerTrafficActive_[index] ? 18.0f : 2.0f,
+                farmerTrafficActive_[index] ? 42.0f : 10.0f);
+            if (farmerTrafficActive_[index])
+            {
+                farmers_[index].setRoadPosition(-108.0f);
+            }
+        }
+
+        if (farmerTrafficActive_[index])
+        {
+            farmers_[index].update(deltaTime);
+        }
+    }
+
+    for (Farmer& worker : cropWorkers_)
+    {
+        worker.update(deltaTime);
+    }
+
+    for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
+    {
+        tractorTrafficTimers_[index] -= deltaTime;
+        if (tractorTrafficTimers_[index] <= 0.0f)
+        {
+            tractorTrafficActive_[index] = !tractorTrafficActive_[index];
+            tractorTrafficTimers_[index] = randomTrafficTime(
+                trafficRng_,
+                tractorTrafficActive_[index] ? 14.0f : 3.0f,
+                tractorTrafficActive_[index] ? 32.0f : 12.0f);
+            if (tractorTrafficActive_[index])
+            {
+                roadTractorZ_[index] = -78.0f;
+            }
+        }
+
+        if (tractorTrafficActive_[index])
+        {
+            tractor_.updateRoad(deltaTime, roadTractorZ_[index]);
+        }
+    }
     Cloud::updateField(deltaTime);
-
-    // Smooth gate opening / closing animation
-    const float gateBlend = 1.0f - std::exp(-5.0f * deltaTime);
-    gateAngle_ += (gateTarget_ - gateAngle_) * gateBlend;
-
-    // Nearest farm tracking for camera focus
-    const int nearest = FarmWorld::nearestFarm(camera.posX(), camera.posZ());
-    float nfx = 0.0f, nfz = 0.0f;
-    FarmWorld::farmCenter(nearest, nfx, nfz);
-    camera.setFocusFarm(nfx, nfz);
-
-    // Tractor world space tracking for chase camera & lighting
-    float f0x = 0.0f, f0z = 0.0f;
-    FarmWorld::farmCenter(0, f0x, f0z);
-    const float farm0YawRad = FarmWorld::farmYaw(0) * Pi / 180.0f;
-    const float twX = f0x + (tractor_.posX() * std::cos(farm0YawRad) - tractor_.posZ() * std::sin(farm0YawRad));
-    const float twZ = f0z + (tractor_.posX() * std::sin(farm0YawRad) + tractor_.posZ() * std::cos(farm0YawRad));
-    camera.setTractorPose(twX, tractor_.posY(), twZ, tractor_.heading() + FarmWorld::farmYaw(0));
-
-    world_.update(deltaTime, camera);
 }
 
-void Scene::render(const Camera& camera)
+void Scene::render() const
 {
-    // 1. Setup multi-light environment
-    lighting_.applyDirectional();
+    renderGround();
+    renderRoad();
+    PowerSubstation::drawRoadUtilities(animation_.waterTime());
+    renderScatteredTrees();
+    renderPonds();
+    renderFarmers();
+    renderRoadTractors();
+    renderBarns();
+    renderCropWorkers();
+    // Keep the full substation visible beside the central road, just beyond
+    // the roadside utility poles and outside the traffic lane.
+    PowerSubstation::draw(16.0f, 0.0f, 0.90f, animation_.waterTime());
 
-    // 2. Setup power plant floodlight (GL_LIGHT2)
-    float ppx = 0.0f, ppy = 0.0f, ppz = 0.0f;
-    PowerPlant::getLightPosition(ppx, ppy, ppz);
-    lighting_.applyPowerPlantLight(ppx, ppy, ppz);
+    // Enlarge each complete farm while retaining a wide road corridor.
+    constexpr float farmScale = 0.78f;
+    constexpr float farmSpacing = 34.0f;
+    constexpr float farmSideOffset = 38.0f;
 
-    // 3. Setup nearest farm porch point light (GL_LIGHT1) and gate lamp (GL_LIGHT5)
-    const int nearest = FarmWorld::nearestFarm(camera.posX(), camera.posZ());
-    float nfx = 0.0f, nfz = 0.0f;
-    FarmWorld::farmCenter(nearest, nfx, nfz);
-    lighting_.applyFarmLights(nfx, nfz, FarmWorld::farmYaw(nearest));
+    for (int row = -2; row <= 3; ++row)
+    {
+        const float z = static_cast<float>(row) * farmSpacing;
+        const int layoutIndex = (row + 2) * 2;
+        renderFarm(-farmSideOffset, z, farmScale, farmLayouts_[layoutIndex]);
+        renderFarm(farmSideOffset, z, farmScale, farmLayouts_[layoutIndex + 1]);
+    }
 
-    // 4. Setup tractor spotlights (GL_LIGHT3 & GL_LIGHT4)
-    float f0x = 0.0f, f0z = 0.0f;
-    FarmWorld::farmCenter(0, f0x, f0z);
-    const float farm0YawRad = FarmWorld::farmYaw(0) * Pi / 180.0f;
-    const float twX = f0x + (tractor_.posX() * std::cos(farm0YawRad) - tractor_.posZ() * std::sin(farm0YawRad));
-    const float twZ = f0z + (tractor_.posX() * std::sin(farm0YawRad) + tractor_.posZ() * std::cos(farm0YawRad));
-    lighting_.applyTractorHeadlights(twX, tractor_.posY() + 0.8f, twZ,
-                                    tractor_.heading() + FarmWorld::farmYaw(0),
-                                    tractor_.isHeadlightsOn());
-
-    // 5. Draw world and farms
-    Lighting::enableLighting();
-    world_.draw(camera, [this](int farmIndex, bool isNearest) {
-        renderFarm(farmIndex, isNearest);
-    });
-    Lighting::disableLighting();
-
-    // 6. Atmosphere & celestial bodies
     Sky::drawSun();
     Cloud::drawField();
+    // renderTransformationMarker();
+}
 
-    // 7. Fireflies at night
-    if (lighting_.isNight())
+void Scene::renderBarns() const
+{
+    Barn::draw(-65.0f, -68.0f, 1.02f, -4.0f, true);
+    Barn::draw(65.0f, -34.0f, 0.96f, 5.0f, false);
+    Barn::draw(-65.0f, 34.0f, 1.08f, -2.0f, true);
+    Barn::draw(65.0f, 68.0f, 1.00f, 7.0f, true);
+}
+
+void Scene::renderCropWorkers() const
+{
+    constexpr float farmScale = 0.78f;
+    constexpr float farmSpacing = 34.0f;
+    constexpr float farmSideOffset = 38.0f;
+
+    for (int row = -2; row <= 3; ++row)
     {
-        renderFireflies(totalTime_);
+        const float z = static_cast<float>(row) * farmSpacing;
+        const int layoutIndex = (row + 2) * 2;
+        for (int side = 0; side < 2; ++side)
+        {
+            const int workerIndex = layoutIndex + side;
+            glPushMatrix();
+            glTranslatef(
+                side == 0 ? -farmSideOffset : farmSideOffset,
+                0.0f,
+                z);
+            glScalef(farmScale, farmScale, farmScale);
+            glRotatef(
+                farmLayouts_[workerIndex].rotation,
+                0.0f, 1.0f, 0.0f);
+            glTranslatef(
+                farmLayouts_[workerIndex].cropOffsetX,
+                0.0f,
+                farmLayouts_[workerIndex].cropOffsetZ);
+            cropWorkers_[workerIndex].render();
+            glPopMatrix();
+        }
+
     }
 }
 
-void Scene::shutdown()
+void Scene::renderScatteredTrees() const
 {
-    world_.release();
+    // Reuse the original tree model while filling the enlarged terrain.
+    // The central exclusion corridor keeps trees away from the road and poles.
+    constexpr int minCoordinate = -450;
+    constexpr int maxCoordinate = 450;
+    constexpr int xSpacing = 14;
+    constexpr int zSpacing = 18;
+    constexpr float roadClearance = 14.0f;
+    constexpr float farmSideOffset = 38.0f;
+    constexpr float farmSpacing = 34.0f;
+
+    const auto clearForTree = [&](float x, float z)
+    {
+        if (std::fabs(x) < roadClearance)
+        {
+            return false;
+        }
+
+        // Keep the enlarged farm footprints, including their crop fields,
+        // houses, fences, and equipment, free of world-scattered trees.
+        for (int row = -2; row <= 3; ++row)
+        {
+            const float farmZ = static_cast<float>(row) * farmSpacing;
+            if (std::fabs(z - farmZ) < 19.0f &&
+                std::fabs(std::fabs(x) - farmSideOffset) < 23.0f)
+            {
+                return false;
+            }
+        }
+
+        // Preserve open space around ponds, barns, the substation, and the sun.
+        const float landmarks[][3] = {
+            {-72.0f, -42.0f, 25.0f},
+            { 73.0f,  24.0f, 27.0f},
+            {-71.0f,  58.0f, 23.0f},
+            {-65.0f, -68.0f, 14.0f},
+            { 65.0f, -34.0f, 14.0f},
+            {-65.0f,  34.0f, 14.0f},
+            { 65.0f,  68.0f, 14.0f},
+            { 70.0f,  92.0f, 17.0f},
+            {-10.0f, -18.0f, 10.0f}};
+        for (const auto& landmark : landmarks)
+        {
+            const float dx = x - landmark[0];
+            const float dz = z - landmark[1];
+            if (dx * dx + dz * dz < landmark[2] * landmark[2])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    for (int x = minCoordinate; x <= maxCoordinate; x += xSpacing)
+    {
+        for (int z = minCoordinate; z <= maxCoordinate; z += zSpacing)
+        {
+            const float placement = treeScatterHash(x, z);
+            const bool outerWorld = std::fabs(static_cast<float>(x)) > 105.0f;
+            const bool guaranteedForest = outerWorld
+                && (std::abs(x / xSpacing + z / zSpacing) % 5 != 0);
+            if (!guaranteedForest && placement < 0.16f)
+            {
+                continue;
+            }
+
+            const float offsetX = (treeScatterHash(x - 11, z + 7) - 0.5f) * 8.0f;
+            const float offsetZ = (treeScatterHash(x + 5, z + 19) - 0.5f) * 10.0f;
+            const float worldX = static_cast<float>(x) + offsetX;
+            const float worldZ = static_cast<float>(z) + offsetZ;
+            if (!clearForTree(worldX, worldZ))
+            {
+                continue;
+            }
+
+            const float size = 1.75f + treeScatterHash(x + 17, z - 31) * 2.45f;
+            Vegetation::drawTree(
+                worldX,
+                worldZ,
+                size);
+        }
+    }
+
+    // Add dense, clearly visible forest clusters in the open world between
+    // the farms and the distant terrain. These are separate from farm-local
+    // trees and use the same reusable tree model.
+    for (int side : {-1, 1})
+    {
+        for (int cluster = 0; cluster < 12; ++cluster)
+        {
+            const float centerX = static_cast<float>(side) *
+                (125.0f + static_cast<float>(cluster % 3) * 55.0f);
+            const float centerZ = -420.0f + static_cast<float>(cluster) * 120.0f;
+
+            for (int row = -3; row <= 3; ++row)
+            {
+                for (int column = -3; column <= 3; ++column)
+                {
+                    const float worldX = centerX
+                        + static_cast<float>(column) * 10.0f;
+                    const float worldZ = centerZ
+                        + static_cast<float>(row) * 11.0f;
+                    const float size = 1.80f + treeScatterHash(
+                        cluster * 17 + row, column - side * 13) * 2.20f;
+                    if (clearForTree(worldX, worldZ))
+                    {
+                        Vegetation::drawTree(worldX, worldZ, size);
+                    }
+                }
+            }
+        }
+    }
 }
 
-void Scene::renderFarm(int farmIndex, bool isNearest) const
+void Scene::renderPonds() const
 {
-    static const float rotations[] = {0.0f, 7.0f, -5.0f, 12.0f, -9.0f,
-                                      4.0f, -13.0f, 8.0f, -6.0f};
-    static const float scales[] = {1.00f, 0.96f, 1.04f, 0.98f, 1.03f,
-                                   0.95f, 1.06f, 1.01f, 0.97f};
+    // Keep the enlarged farms and ponds separated from the central road.
+    Pond::draw(-72.0f, -42.0f, 23.0f, 16.0f, animation_.waterTime(),        false);
+    Pond::draw( 73.0f,  24.0f, 25.0f, 17.0f, animation_.waterTime() + 1.4f, true);
+    Pond::draw(-71.0f,  58.0f, 21.0f, 15.0f, animation_.waterTime() + 2.8f, false);
+}
+
+void Scene::renderFarmers() const
+{
+    for (const Farmer& farmer : farmers_)
+    {
+        farmer.render();
+    }
+}
+
+void Scene::renderRoadTractors() const
+{
+    constexpr Tractor::Color colors[] = {
+        Tractor::Color::Red,
+        Tractor::Color::Green,
+        Tractor::Color::Blue,
+        Tractor::Color::Brown};
+
+    for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
+    {
+        if (tractorTrafficActive_[index])
+        {
+            tractor_.drawRoadTractor(roadTractorZ_[index], colors[index]);
+        }
+    }
+}
+
+void Scene::renderGround() const
+{
+    glDisable(GL_LIGHTING);
+    glColor3f(0.20f, 0.50f, 0.20f);
 
     glPushMatrix();
-    glRotatef(rotations[farmIndex], 0.0f, 1.0f, 0.0f);
-    glScalef(scales[farmIndex], scales[farmIndex], scales[farmIndex]);
+    glTranslatef(0.0f, -0.02f, 0.0f);
+    glScalef(1.0f, 1.0f, 0.85f);
+    // Oversized terrain gives the camera a continuous horizon beyond the
+    // designed farm area.
+    Primitives::drawPlane(1000.0f, 1000.0f);
+    glPopMatrix();
 
-    // Shadows rendered first so objects draw on top
-    if (isNearest)
+    glLineWidth(1.0f);
+    glBegin(GL_LINES);
+    // Keep a light reference grid without spending a draw call on every
+    // single world unit across the entire expanded map.
+    for (int coordinate = -110; coordinate <= 110; coordinate += 5)
     {
-        renderFarmShadows(farmIndex);
+        const float value = static_cast<float>(coordinate);
+        glColor3f(0.24f, 0.56f, 0.24f);
+        glVertex3f(value, 0.01f, -110.0f);
+        glVertex3f(value, 0.01f, 110.0f);
+        glVertex3f(-110.0f, 0.01f, value);
+        glVertex3f(110.0f, 0.01f, value);
     }
+    glEnd();
+}
 
-    renderCropField();
-    renderCrops();
-    renderTrees();
-    renderAnimals();
-    renderFarmers();
-    renderPath();
-    renderBoundary();
-    farmhouse_.render();
-    // Barn on selected farms for variety
-    if (farmIndex % 3 == 1)
-        Barn::drawBarn(-10.5f, 12.5f, 0.52f, 18.0f);
-    else if (farmIndex % 3 == 2)
-        Barn::drawBarn(13.5f, 10.0f, 0.44f, -12.0f);
-    tractor_.drawTractor();
-    Windmill::drawWindmill(-14.0f, 1.0f, animation_.windmillAngle(), 1.15f);
-    renderRocks();
-    renderChimneySmoke(totalTime_);
+void Scene::renderRoad() const
+{
+    glDisable(GL_LIGHTING);
 
+    glColor3f(0.22f, 0.22f, 0.20f);
+    glPushMatrix();
+    glTranslatef(0.0f, 0.045f, 0.0f);
+    Primitives::drawPlane(9.0f, 1000.0f);
+    glPopMatrix();
+
+    glColor3f(0.86f, 0.75f, 0.24f);
+    glPushMatrix();
+    glTranslatef(0.0f, 0.06f, 0.0f);
+    glScalef(0.12f, 1.0f, 1000.0f);
+    Primitives::drawCube(1.0f, 0.02f, 0.035f);
     glPopMatrix();
 }
 
-void Scene::renderFarmShadows(int farmIndex) const
+void Scene::renderFarm(
+    float x, float z, float scale, const FarmLayout& layout) const
 {
-    Shadow::begin(0.03f);
+    glPushMatrix();
+    glTranslatef(x, 0.0f, z);
+    glScalef(scale, scale, scale);
+    glRotatef(layout.rotation, 0.0f, 1.0f, 0.0f);
 
+    glPushMatrix();
+    glTranslatef(layout.cropOffsetX, 0.0f, layout.cropOffsetZ);
+    renderCropField();
+    renderCrops();
+    glPopMatrix();
+
+    const float treePositions[5][2] = {
+        {-18.0f, -13.0f}, {-12.0f, -16.0f}, {18.0f, -13.0f},
+        {19.0f, 1.0f}, {-18.0f, 9.0f}};
+    const float treeScales[5] = {1.75f, 1.35f, 1.55f, 1.20f, 1.60f};
+    for (int tree = 0; tree < layout.treeCount; ++tree)
+    {
+        Vegetation::drawTree(
+            treePositions[tree][0], treePositions[tree][1], treeScales[tree]);
+    }
+
+    const float animalPositions[2][4] = {
+        {-16.0f, -2.0f, 1.05f, 8.0f},
+        {16.0f, -7.0f, 0.90f, -18.0f}};
+    for (int animal = 0; animal < layout.animalCount; ++animal)
+    {
+        Animals::drawCow(
+            animalPositions[animal][0], animalPositions[animal][1],
+            animalPositions[animal][2], animalPositions[animal][3]);
+    }
+
+    const float chickenPositions[3][4] = {
+        {-8.0f, 5.0f, 0.62f, 28.0f},
+        {8.5f, 8.0f, 0.55f, -32.0f},
+        {0.0f, 13.0f, 0.58f, 5.0f}};
+    for (int chicken = 0; chicken < layout.chickenCount; ++chicken)
+    {
+        Animals::drawChicken(
+            chickenPositions[chicken][0], chickenPositions[chicken][1],
+            chickenPositions[chicken][2], chickenPositions[chicken][3]);
+    }
+
+    renderPath();
+    renderBoundary();
+
+    glPushMatrix();
+    glTranslatef(layout.houseOffsetX, 0.0f, layout.houseOffsetZ);
     farmhouse_.render();
-    if (farmIndex % 3 == 1)
-        Barn::drawBarn(-10.5f, 12.5f, 0.52f, 18.0f);
-    else if (farmIndex % 3 == 2)
-        Barn::drawBarn(13.5f, 10.0f, 0.44f, -12.0f);
-    tractor_.drawTractor();
-    Windmill::drawWindmill(-14.0f, 1.0f, animation_.windmillAngle(), 1.15f);
+    glPopMatrix();
 
-    Shadow::end();
+    if (layout.hasTractor)
+    {
+        tractor_.drawTractor();
+    }
+    if (layout.hasWindmill)
+    {
+        Windmill::drawWindmill(
+            -14.0f, 1.0f, animation_.windmillAngle(), 1.15f);
+    }
+    renderRocks();
+
+    glPopMatrix();
 }
 
 void Scene::renderCropField() const
@@ -210,15 +530,12 @@ void Scene::renderCropField() const
 
 void Scene::renderCrops() const
 {
-    // Small wind sway animation on crops
-    const float windSway = std::sin(totalTime_ * 2.2f) * 0.05f;
-
     for (int row = 0; row < 6; ++row)
     {
         const float z = -10.0f + static_cast<float>(row) * 1.35f;
         for (int column = 0; column < 7; ++column)
         {
-            const float x = -7.5f + static_cast<float>(column) * 2.5f + windSway;
+            const float x = -7.5f + static_cast<float>(column) * 2.5f;
             const float size = 0.82f + static_cast<float>((row + column) % 3) * 0.08f;
             Vegetation::drawCrop(x, z, size);
         }
@@ -235,43 +552,12 @@ void Scene::renderTrees() const
     Vegetation::drawTree(18.0f, 14.0f, 1.55f);
 }
 
-void Scene::renderFarmers() const
-{
-    // 1. Farmer standing on farmhouse porch
-    Farmer::drawFarmer(-4.0f, 0.5f, 90.0f, totalTime_, Farmer::Standing, 1.05f);
-
-    // 2. Farmer working in the crop field with hoe
-    Farmer::drawFarmer(-2.5f, -6.5f, -15.0f, totalTime_, Farmer::Working, 1.0f);
-
-    // 3. Farmer walking along the farm driveway
-    const float walkCycle = std::sin(totalTime_ * 0.5f);
-    const float walkerZ = -5.0f + walkCycle * 8.0f;
-    const float walkerHeading = (walkCycle >= 0.0f) ? 0.0f : 180.0f;
-    Farmer::drawFarmer(10.0f, walkerZ, walkerHeading, totalTime_, Farmer::Walking, 1.0f);
-}
-
 void Scene::renderAnimals() const
 {
-    // 1. Walking cow following elliptical grazing path with swinging legs
-    const float cowAngle = totalTime_ * 0.30f;
-    const float cowX = -16.0f + std::sin(cowAngle) * 3.2f;
-    const float cowZ = -2.0f + std::cos(cowAngle) * 4.2f;
-    const float cowHeading = std::atan2(std::cos(cowAngle) * 3.2f, -std::sin(cowAngle) * 4.2f) * 180.0f / Pi;
-    const float legSwing = std::sin(totalTime_ * 4.5f) * 22.0f;
-    Animals::drawWalkingCow(cowX, cowZ, 1.05f, cowHeading, legSwing, false);
-
-    // 2. Grazing cow with head down
-    Animals::drawWalkingCow(16.0f, -7.0f, 0.90f, -18.0f, 0.0f, true);
-
-    // 3. Resting cow in back pasture
+    // Place cows in open pasture areas, away from the crop rows and buildings.
+    Animals::drawCow(-16.0f, -2.0f, 1.05f, 8.0f);
+    Animals::drawCow(16.0f, -7.0f, 0.90f, -18.0f);
     Animals::drawCow(-15.0f, 14.0f, 0.82f, 28.0f);
-
-    // 4. Animated chickens pecking and flapping around farmyard
-    Animals::drawChicken(-13.0f, 12.0f, 0.85f, totalTime_ * 12.0f, totalTime_);
-    Animals::drawChicken(-14.5f, 14.5f, 0.80f, -40.0f + std::sin(totalTime_ * 1.5f) * 25.0f, totalTime_ + 1.2f);
-    Animals::drawChicken(-12.0f, 13.8f, 0.75f, 65.0f, totalTime_ + 2.4f);
-    Animals::drawChicken( 14.0f, -5.0f, 0.82f, 110.0f, totalTime_ + 0.8f);
-    Animals::drawChicken( 15.2f, -3.8f, 0.78f, -75.0f, totalTime_ + 1.8f);
 }
 
 void Scene::renderBoundary() const
@@ -320,22 +606,17 @@ void Scene::renderGate() const
     drawFencePost(8.0f, -19.0f);
     drawFencePost(12.0f, -19.0f);
 
-    // Left gate panel hinges at x = 8.0, swings inward (negative angle)
-    drawGatePanel(8.0f, 1.0f, -gateAngle_);
-
-    // Right gate panel hinges at x = 12.0, swings inward (positive angle)
-    drawGatePanel(12.0f, -1.0f, gateAngle_);
+    drawGatePanel(9.0f, -5.0f);
+    drawGatePanel(11.0f, 5.0f);
 }
 
-void Scene::drawGatePanel(float hingeX, float panelDir, float angle) const
+void Scene::drawGatePanel(float x, float angle) const
 {
-    // Hierarchical transformation: hinge pivot -> rotate -> offset to panel center
     for (float y : {0.70f, 1.45f})
     {
         glPushMatrix();
-        glTranslatef(hingeX, y, -19.0f);
+        glTranslatef(x, y, -19.0f);
         glRotatef(angle, 0.0f, 1.0f, 0.0f);
-        glTranslatef(panelDir * 1.0f, 0.0f, 0.0f);
         glScalef(2.0f, 0.16f, 0.16f);
         Primitives::drawCube(1.0f, 1.0f, 1.0f);
         glPopMatrix();
@@ -381,66 +662,6 @@ void Scene::drawRock(float x, float z, float scale, float rotation) const
     glScalef(scale, scale * 0.55f, scale * 0.75f);
     Primitives::drawCube(1.0f, 1.0f, 1.0f);
     glPopMatrix();
-}
-
-void Scene::renderChimneySmoke(float time) const
-{
-    // Chimney position atop farmhouse
-    const float chimneyX = 3.6f;
-    const float chimneyY = 7.8f;
-    const float chimneyZ = -1.2f;
-
-    glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_LIGHTING);
-
-    constexpr int puffCount = 9;
-    for (int i = 0; i < puffCount; ++i)
-    {
-        const float phase = std::fmod(time * 0.65f + static_cast<float>(i) / puffCount, 1.0f);
-        const float py = chimneyY + phase * 4.8f;
-        const float px = chimneyX + std::sin(phase * 4.0f + i) * 0.35f + phase * 0.8f;
-        const float pz = chimneyZ + std::cos(phase * 3.5f + i) * 0.30f;
-        const float size = 0.25f + phase * 0.95f;
-        const float alpha = (1.0f - phase) * 0.28f;
-
-        glColor4f(0.85f, 0.85f, 0.88f, alpha);
-        glPushMatrix();
-        glTranslatef(px, py, pz);
-        glScalef(size, size, size);
-        Primitives::drawCube(1.0f, 1.0f, 1.0f);
-        glPopMatrix();
-    }
-
-    glPopAttrib();
-}
-
-void Scene::renderFireflies(float time) const
-{
-    glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive glow
-    glDepthMask(GL_FALSE);
-    glDisable(GL_LIGHTING);
-    glPointSize(5.0f);
-
-    glBegin(GL_POINTS);
-    for (int i = 0; i < 30; ++i)
-    {
-        const float angle = time * 0.5f + static_cast<float>(i) * 0.85f;
-        const float fx = std::sin(angle * 1.3f + i * 2.1f) * 22.0f;
-        const float fz = std::cos(angle * 1.1f + i * 1.7f) * 18.0f;
-        const float fy = 0.6f + std::abs(std::sin(angle * 2.5f + i)) * 1.8f;
-        const float pulse = 0.4f + 0.6f * std::abs(std::sin(time * 3.2f + i * 1.3f));
-
-        glColor4f(0.85f * pulse, 0.98f * pulse, 0.25f * pulse, pulse);
-        glVertex3f(fx, fy, fz);
-    }
-    glEnd();
-
-    glPopAttrib();
 }
 
 void Scene::renderTransformationMarker() const

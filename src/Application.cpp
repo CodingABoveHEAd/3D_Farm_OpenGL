@@ -1,7 +1,6 @@
 #include "Application.h"
 
 #include "Input.h"
-#include "graphics/TextureManager.h"
 #include "objects/sky.h"
 
 #include <GLFW/glfw3.h>
@@ -18,8 +17,6 @@ bool Application::initialize(int width, int height, const char* title)
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-    glfwWindowHint(GLFW_STENCIL_BITS, 8);
-    glfwWindowHint(GLFW_DEPTH_BITS, 24);
 
     window_ = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!window_)
@@ -30,14 +27,15 @@ bool Application::initialize(int width, int height, const char* title)
     }
 
     glfwMakeContextCurrent(window_);
+    // Do not cap rendering at the monitor refresh rate. This keeps camera
+    // input responsive on systems where the scene can render faster.
+    glfwSwapInterval(0);
     glfwSetWindowUserPointer(window_, this);
     glfwSetFramebufferSizeCallback(window_, framebufferSizeCallback);
     glfwSetCursorPosCallback(window_, cursorPositionCallback);
     glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
-    glClearStencil(0);
     glClearColor(0.52f, 0.80f, 0.98f, 1.0f);
 
     int framebufferWidth = 0;
@@ -45,8 +43,6 @@ bool Application::initialize(int width, int height, const char* title)
     glfwGetFramebufferSize(window_, &framebufferWidth, &framebufferHeight);
     glViewport(0, 0, framebufferWidth, framebufferHeight);
     camera_.applyProjection(framebufferWidth, framebufferHeight);
-    FarmWorld::setupAtmosphere();
-    TextureManager::init();
     Input::initialize(window_);
     previousTime_ = glfwGetTime();
 
@@ -61,6 +57,9 @@ void Application::run()
         const float deltaTime = std::min(static_cast<float>(currentTime - previousTime_), 0.1f);
         previousTime_ = currentTime;
 
+        // Process mouse and keyboard events before sampling input so movement
+        // responds in the same frame instead of one frame late.
+        glfwPollEvents();
         Input::update(window_);
         if (Input::wasPressed(GLFW_KEY_ESCAPE))
         {
@@ -69,11 +68,10 @@ void Application::run()
 
         scene_.handleInput();
         camera_.update(window_, deltaTime);
-        scene_.update(deltaTime, camera_);
+        scene_.update(deltaTime);
         renderFrame(deltaTime);
 
         glfwSwapBuffers(window_);
-        glfwPollEvents();
     }
 }
 
@@ -81,8 +79,6 @@ void Application::shutdown()
 {
     if (window_)
     {
-        scene_.shutdown();
-        TextureManager::shutdown();
         glfwDestroyWindow(window_);
         window_ = nullptr;
     }
@@ -112,7 +108,7 @@ void Application::renderFrame(float)
 {
     glDisable(GL_LIGHTING);
     Sky::setClearColor(scene_.isNight());
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     camera_.applyView();
-    scene_.render(camera_);
+    scene_.render();
 }

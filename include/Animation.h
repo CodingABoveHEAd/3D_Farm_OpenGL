@@ -6,6 +6,7 @@ public:
 
     float windmillAngle() const { return windmillAngle_; }
     float cloudOffset() const { return cloudOffset_; }
+    float waterTime() const { return waterTime_; }
 
     void changeWindmillSpeed(float delta);
     void togglePaused() { paused_ = !paused_; }
@@ -15,5 +16,6 @@ private:
     float windmillAngle_ = 0.0f;     // degrees, accumulated
     float windmillSpeed_ = 45.0f;    // degrees per second
     float cloudOffset_ = -28.0f;     // world X position offset
+    float waterTime_ = 0.0f;         // seconds used by animated pond surfaces
     bool  paused_        = false;
 };

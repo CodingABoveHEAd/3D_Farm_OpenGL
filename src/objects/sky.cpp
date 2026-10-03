@@ -196,6 +196,9 @@ void drawSunBody()
     glDepthMask(GL_TRUE);
 
     // --- bright core ---
+    // Keep depth testing active so nearby scene geometry can occlude the sun.
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
     solidDisc(2.0f, {1.00f, 0.99f, 0.85f}, {1.00f, 0.88f, 0.40f});
 }
 

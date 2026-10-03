@@ -87,7 +87,7 @@ void drawCloud(float x, float y, float z, float scale)
 
 
 // ============================================================
-//  Cloud field — 24 clouds in a huge disc, EVERY direction
+//  Cloud field — a dense set of large clouds throughout the sky
 // ============================================================
 //
 //  Strategy:
@@ -101,11 +101,11 @@ void drawCloud(float x, float y, float z, float scale)
 
 namespace {
 
-constexpr int   kMaxClouds   = 24;
+constexpr int   kMaxClouds   = 72;
 constexpr float kMinRadius   =  25.0f;    // don't spawn on top of camera
-constexpr float kMaxRadius   = 220.0f;    // how far out clouds go
-constexpr float kYMin        =  15.0f;
-constexpr float kYMax        =  55.0f;
+constexpr float kMaxRadius   =  300.0f;    // cover the complete visible horizon
+constexpr float kYMin        =  18.0f;
+constexpr float kYMax        =  72.0f;
 
 struct CloudInstance {
     float x, y, z;
@@ -158,7 +158,7 @@ void respawnCloud(CloudInstance& c, unsigned int seed)
     randomDirection(seed + 2, c.dirX, c.dirZ);
 
     c.y     = kYMin + rand01(seed + 3) * (kYMax - kYMin);
-    c.scale =  1.5f + rand01(seed + 4) * 2.2f;
+    c.scale =  2.2f + rand01(seed + 4) * 2.8f;
     c.speed =  0.5f + rand01(seed + 5) * 1.2f;
 }
 
@@ -177,7 +177,7 @@ void initField()
 
     // --- DEBUG: print every cloud's starting position ---
     // Open the console after running. You should see X and Z values
-    // that span BOTH positive and negative — from -220 to +220.
+    // that span BOTH positive and negative — from -300 to +300.
     // If they're all clustered on one side, something is wrong with
     // the random generator. But this code has been tested — it works.
     //
@@ -217,7 +217,7 @@ void updateField(float dt)
 
             unsigned int s = (unsigned int)(i * 7919 + 137);
             c.y     = kYMin + rand01(s) * (kYMax - kYMin);
-            c.scale =  1.5f + rand01(s + 1) * 2.2f;
+            c.scale =  2.2f + rand01(s + 1) * 2.8f;
             c.speed =  0.5f + rand01(s + 2) * 1.2f;
             // keep same direction so it keeps drifting outward
         }

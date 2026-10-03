@@ -14,6 +14,8 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - A 3D ground plane and verification grid
 - A reference cube rendered with a model transformation
 - Mouse-look camera rotation
+- Fast smooth camera movement with WASD and Q/E vertical controls
+- Extended terrain, road, and utility lines for a fake infinite-world horizon
 - Phase 2 farm ground, crop region, and boundary fence
 - Phase 3 low-polygon farmhouse built from OpenGL primitives
 - Phase 4 reusable trees and repeated crop instances
@@ -21,6 +23,20 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - Phase 6 low-polygon manually controlled tractor
 - Phase 8 sun and smoothly moving cloud groups
 - Static grazing cows built from low-polygon primitives
+- Twelve transformed copies of the complete farm arranged along a central road
+- Animated farmers walking only along the central road
+- A dense sky field of enlarged drifting clouds distributed across the horizon
+- A rural electrical substation with fenced transformers and sagging power lines
+- Utility poles and sagging power lines running along both sides of the main road
+- Per-farm layout variation with different tree, animal, tractor, and windmill arrangements
+- Very dense, enlarged forest belts and clusters throughout the complete open world while keeping the road clear
+- Very dense world-wide tree scattering includes roadside belts while landmark and farm footprints remain clear
+- Detailed red, green, blue, and brown tractors circulating on the central road
+- Probabilistic, independently staggered road traffic arrivals
+- Detailed rural barns with roofs, doors, beams, hay, fences, and equipment
+- Enlarged world objects and landmarks for a fuller visual composition
+- Farmers tending the crop rows with repeated walking and working motions
+- Ponds with animated water, natural edges, reeds, rocks, grass, and a wooden bridge
 
 ## Phase 2 Environment
 
@@ -59,25 +75,85 @@ Cloud translation is controlled by `Animation::cloudOffset()`. Every frame, `Ani
 
 [Animals.cpp](src/objects/Animals.cpp) provides the reusable `Animals::drawCow(x, z, scale, rotation)` function. Each cow is built hierarchically from a body, patches, lowered neck and head, muzzle, ears, horns, eyes, four legs with hooves, and a tail. Three cows are placed in the open pasture with different world positions, scales, and rotations. They are static grazing poses; no new animal animation was added.
 
+## Multiple Farms and Road
+
+The complete existing farm layout is rendered twelve times without changing the
+farmhouse, tractor, windmill, vegetation, animal, fence, or rock definitions.
+Each copy uses the same geometry and colors under a uniform world transform.
+The copies are arranged in six rows on both sides of a central road, and the
+ground is expanded to provide room for the full layout. The farms use enlarged
+uniform transforms and wider row spacing so neighboring farms have more room
+around their fences, crops, and equipment.
+
+## Farmers
+
+Farmers are reusable low-polygon characters animated by the scene update loop.
+They travel only along the central road in a larger group with different
+positions, speeds, and walking phases. Their walking limbs swing while moving,
+and the existing `P` pause control pauses their movement along with the other
+scene animations.
+
+## Farm Variation
+
+The twelve farms use deterministic scene-level layouts instead of identical
+copy-pasted arrangements. Each layout can have two to five trees, zero to two
+cows, an optional tractor, an optional windmill, and small independent offsets
+for the crop field and farmhouse. The reusable object implementations and
+their colors remain unchanged.
+
+## Road Tractors
+
+The existing detailed tractor model is reused for road traffic rather than
+duplicated. Four scaled road tractors circulate along the central road in red,
+green, blue, and brown body variants. The original manually controlled farm
+tractor remains available with `I`, `J`, `K`, and `L`.
+
+Road farmers and tractors no longer follow a fixed synchronized pattern. Each
+traffic unit independently receives a randomized active travel duration and
+waiting interval, then re-enters from the road edge. The initial active states
+are staggered as well, so every application run produces a different traffic
+arrival sequence.
+
+## Barns
+
+Four rural barns are placed around the outer farm areas. Each barn is built
+hierarchically from a large body, two sloped roof slabs, large front doors, a
+side door, windows, structural beams, hay bales, and small nearby equipment.
+Several barns also have their own surrounding fence.
+
+Each farm also has a crop worker placed inside its field. Crop workers move
+between nearby crop rows, pause their walking, and continue with slower
+working motions so they appear to tend the plants rather than travel on the
+road.
+
+## Ponds and Wooden Bridge
+
+Three ponds are placed around the farms. Each pond has a sandy soil edge,
+rocks, reeds, grass, translucent water, and animated brightness variation.
+The larger pond includes a rural wooden bridge with a deck, supports, posts,
+side railings, and a curved top rail.
+
+The bridge railing is sampled from a cubic Bezier curve. The implementation
+keeps the full curve equation in `src/objects/Pond.cpp` as a course-project
+comment and uses the sampled points to create connected wooden rail segments.
+
 ## Controls
 
 - `W`, `A`, `S`, `D`: move the camera
 - `Q`, `E`: move vertically
-## Multi-Farm World
-
-`FarmWorld` expands the original farm into nine countryside farms. The existing
-farm renderer is reused for every instance with small rotation and scale
-variations. Farms are arranged organically rather than in a rectangular grid,
-and a branched dirt-road network connects their gate paths. The world also
-contains deterministic ground variation, ponds, tree clusters, bushes, rocks,
-hay bales, power lines, hills, fog, and distant clouds.
-
-FarmWorld travel controls are `M` for the next farm, `B` for the previous farm,
-and number keys `1` through `9` for direct travel. Travel uses a short elevated
-arc so the wider countryside can be read while moving between farms.
+- `Left Shift`: move faster
+- `Left Ctrl`: move slowly for precise positioning
 - Mouse: rotate the camera
 - Arrow keys: rotate the camera as an alternative
 - `R`: reset the camera
+- `I`, `K`: move tractor forward/backward
+- `J`, `L`: move tractor left/right
+- `Esc`: exit
+
+The mouse cursor is captured while the application is running. Press `Esc` to close the window and release the cursor.
+
+## Phase 1 Run Script
+
 On Windows with the existing MSYS2 UCRT64 GLFW installation, run this from PowerShell:
 
 ```powershell
