@@ -285,6 +285,7 @@ void Farmhouse::render() const
         0.0f,
         HouseZ
     );
+    glScalef(1.30f, 1.30f, 1.30f);
 
     renderFoundation();
     renderBody();

@@ -1362,6 +1362,39 @@ void drawFence()
     drawDangerSign({2.0f, 1.45f, d + 0.08f}, 180.0f, 0.45f);
 }
 
+
+// Street-lamp style luminaire on one end of the crossarm. `side` = -1 or +1 (X direction).
+// The lens is drawn unlit so it looks like it is glowing, even with lighting enabled.
+void drawPoleLamp(float side)
+{
+    const float postX  = side * 1.42f;
+    const float baseY  = dim::kCrossarmY + 0.07f;
+    const float topY   = baseY + 0.60f;
+    const float headX  = side * 2.00f;
+    const float headY  = topY + 0.06f;
+
+    // Mounting plate on the crossarm and a short vertical post
+    box(palette::kDarkSteel, {postX, baseY, 0.0f}, {0.16f, 0.04f, 0.16f});
+    column(palette::kDarkSteel, {postX, baseY, 0.0f}, 0.035f, 0.028f, 0.60f, 8);
+
+    // Curved-looking arm: rising bracket to the head plus a diagonal brace
+    tube(palette::kDarkSteel, {postX, topY, 0.0f}, {headX, headY, 0.0f}, 0.026f, 6);
+    tube(palette::kDarkSteel, {postX, baseY + 0.30f, 0.0f}, {headX - side * 0.18f, headY - 0.02f, 0.0f}, 0.014f, 5);
+
+    // Luminaire housing: shallow hood, body and a reflector rim
+    box(palette::kGreyPaint, {headX, headY + 0.045f, 0.0f}, {0.52f, 0.06f, 0.26f});
+    box(palette::kDarkSteel, {headX, headY, 0.0f},           {0.46f, 0.07f, 0.22f});
+    box(palette::kDarkSteel, {headX, headY - 0.045f, 0.0f},  {0.50f, 0.02f, 0.26f});
+    box(palette::kDarkSteel, {headX + side * 0.24f, headY, 0.0f}, {0.04f, 0.09f, 0.14f});   // end cap
+
+    // Glowing lens (unlit) with a brighter bulb in the middle
+    glPushAttrib(GL_ENABLE_BIT);
+    glDisable(GL_LIGHTING);
+    box(palette::kLampGlow, {headX, headY - 0.062f, 0.0f}, {0.40f, 0.025f, 0.18f});
+    box({1.0f, 1.0f, 0.90f}, {headX, headY - 0.070f, 0.0f}, {0.22f, 0.012f, 0.10f});
+    glPopAttrib();
+}
+
 // ---------------------------------------------------------------------------
 // Utility pole line
 // ---------------------------------------------------------------------------
@@ -1396,6 +1429,10 @@ void drawPoleAt(float x, float z, bool detailed)
         insulator(palette::kPorcelain, {side * 1.05f, dim::kCrossarmY + 0.07f, 0.0f}, 0.045f, 0.10f, 4, 0.05f);
         box(palette::kDarkSteel, {side * 1.05f, dim::kCrossarmY + 0.075f, 0.0f}, {0.12f, 0.02f, 0.12f});
     }
+
+        // Street lamps on both ends of the crossarm.
+    drawPoleLamp(-1.0f);
+    drawPoleLamp( 1.0f);
 
     if (detailed)
     {

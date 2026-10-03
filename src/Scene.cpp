@@ -7,8 +7,10 @@
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <initializer_list>
 #include <random>
+#include <vector>
 
 namespace
 {
@@ -24,6 +26,361 @@ float treeScatterHash(int x, int z)
         static_cast<float>(x) * 12.9898f +
         static_cast<float>(z) * 78.233f) * 43758.5453f;
     return value - std::floor(value);
+}
+
+// ---------------------------------------------------------------------------
+// Performance settings
+// ---------------------------------------------------------------------------
+// Static vegetation (trees and crops) is recorded into OpenGL display lists.
+// If your Vegetation::drawTree / drawCrop animate on their own (for example
+// they sway using glfwGetTime inside), set this to false: culling still
+// works, but the vegetation is redrawn live every frame.
+constexpr bool kCacheVegetation = true;
+
+constexpr int   kFarmListCount     = 12;
+constexpr float kFarmCullRadius    = 32.0f;
+constexpr float kTreeChunkSize     = 60.0f;
+constexpr float kTreeCullMargin    = 18.0f;
+
+// ---------------------------------------------------------------------------
+// View frustum culling
+// ---------------------------------------------------------------------------
+// The frustum is rebuilt from the current projection and modelview matrices
+// at the start of Scene::render(), so anything outside the view is skipped
+// without changing what is visible on screen.
+struct Frustum
+{
+    float plane[6][4];
+};
+
+Frustum gFrustum{};
+bool gFrustumValid = false;
+bool gFarmVisible[kFarmListCount] = {};
+
+void captureFrustum()
+{
+    GLfloat proj[16];
+    GLfloat view[16];
+    glGetFloatv(GL_PROJECTION_MATRIX, proj);
+    glGetFloatv(GL_MODELVIEW_MATRIX, view);
+
+    // clip = projection * modelview (both column-major)
+    float clip[16];
+    for (int col = 0; col < 4; ++col)
+    {
+        for (int row = 0; row < 4; ++row)
+        {
+            float value = 0.0f;
+            for (int k = 0; k < 4; ++k)
+            {
+                value += proj[k * 4 + row] * view[col * 4 + k];
+            }
+            clip[col * 4 + row] = value;
+        }
+    }
+
+    const auto rowOf = [&](int r, float out[4])
+    {
+        out[0] = clip[0 * 4 + r];
+        out[1] = clip[1 * 4 + r];
+        out[2] = clip[2 * 4 + r];
+        out[3] = clip[3 * 4 + r];
+    };
+
+    float r0[4], r1[4], r2[4], r3[4];
+    rowOf(0, r0);
+    rowOf(1, r1);
+    rowOf(2, r2);
+    rowOf(3, r3);
+
+    const float* rows[3] = {r0, r1, r2};
+    bool valid = true;
+
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        for (int side = 0; side < 2; ++side)
+        {
+            const float sign = side == 0 ? 1.0f : -1.0f;
+            float* p = gFrustum.plane[axis * 2 + side];
+            for (int i = 0; i < 4; ++i)
+            {
+                p[i] = r3[i] + sign * rows[axis][i];
+            }
+
+            const float length = std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+            if (!(length > 1e-6f))
+            {
+                valid = false;
+                continue;
+            }
+            for (int i = 0; i < 4; ++i)
+            {
+                p[i] /= length;
+            }
+        }
+    }
+
+    gFrustumValid = valid;
+}
+
+bool sphereVisible(float x, float y, float z, float radius)
+{
+    if (!gFrustumValid)
+    {
+        return true;
+    }
+
+    for (int i = 0; i < 6; ++i)
+    {
+        const float* p = gFrustum.plane[i];
+        if (p[0] * x + p[1] * y + p[2] * z + p[3] < -radius)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Display-list helper
+// ---------------------------------------------------------------------------
+// Records `body` once and replays it afterwards. If a list cannot be created
+// the body is simply drawn directly.
+template <typename Body>
+void cachedList(GLuint& list, Body&& body)
+{
+    if (list == 0)
+    {
+        list = glGenLists(1);
+        if (list == 0)
+        {
+            body();
+            return;
+        }
+
+        glNewList(list, GL_COMPILE);
+        body();
+        glEndList();
+    }
+
+    glCallList(list);
+}
+
+// Some primitives create their own helper data on first use, which is not
+// allowed while a display list is being recorded. Touch them once, scaled to
+// nothing, so nothing visible is drawn.
+void warmUpDrawing()
+{
+    static bool done = false;
+    if (done)
+    {
+        return;
+    }
+    done = true;
+
+    glPushMatrix();
+    glScalef(0.0f, 0.0f, 0.0f);
+    Primitives::drawPlane(1.0f, 1.0f);
+    Primitives::drawCube(1.0f, 1.0f, 1.0f);
+    Vegetation::drawTree(0.0f, 0.0f, 1.0f);
+    Vegetation::drawCrop(0.0f, 0.0f, 1.0f);
+    glPopMatrix();
+}
+
+// ---------------------------------------------------------------------------
+// Scattered world trees: placed once, grouped into chunks
+// ---------------------------------------------------------------------------
+struct TreeInstance
+{
+    float x;
+    float z;
+    float size;
+};
+
+struct TreeChunk
+{
+    std::vector<TreeInstance> trees;
+    GLuint list = 0;
+    float centerX = 0.0f;
+    float centerY = 0.0f;
+    float centerZ = 0.0f;
+    float radius = 0.0f;
+};
+
+std::vector<TreeChunk> gTreeChunks;
+bool gTreeChunksBuilt = false;
+
+void buildTreeChunks()
+{
+    gTreeChunksBuilt = true;
+
+    // Reuse the original tree model while filling the enlarged terrain.
+    // The central exclusion corridor keeps trees away from the road and poles.
+    constexpr int minCoordinate = -450;
+    constexpr int maxCoordinate = 450;
+    constexpr int xSpacing = 14;
+    constexpr int zSpacing = 18;
+    constexpr float roadClearance = 14.0f;
+    constexpr float farmSideOffset = 38.0f;
+    constexpr float farmSpacing = 34.0f;
+
+    const auto clearForTree = [&](float x, float z)
+    {
+        if (std::fabs(x) < roadClearance)
+        {
+            return false;
+        }
+
+        // Keep the enlarged farm footprints, including their crop fields,
+        // houses, fences, and equipment, free of world-scattered trees.
+        for (int row = -2; row <= 3; ++row)
+        {
+            const float farmZ = static_cast<float>(row) * farmSpacing;
+            if (std::fabs(z - farmZ) < 19.0f &&
+                std::fabs(std::fabs(x) - farmSideOffset) < 23.0f)
+            {
+                return false;
+            }
+        }
+
+        // Preserve open space around ponds, barns, the substation, and the sun.
+        const float landmarks[][3] = {
+            {-72.0f, -42.0f, 25.0f},
+            { 73.0f,  24.0f, 27.0f},
+            {-71.0f,  58.0f, 23.0f},
+            {-65.0f, -68.0f, 14.0f},
+            { 65.0f, -34.0f, 14.0f},
+            {-65.0f,  34.0f, 14.0f},
+            { 65.0f,  68.0f, 14.0f},
+            { 70.0f,  92.0f, 17.0f},
+            {-10.0f, -18.0f, 10.0f}};
+        for (const auto& landmark : landmarks)
+        {
+            const float dx = x - landmark[0];
+            const float dz = z - landmark[1];
+            if (dx * dx + dz * dz < landmark[2] * landmark[2])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    std::vector<TreeInstance> all;
+    all.reserve(4096);
+
+    for (int x = minCoordinate; x <= maxCoordinate; x += xSpacing)
+    {
+        for (int z = minCoordinate; z <= maxCoordinate; z += zSpacing)
+        {
+            const float placement = treeScatterHash(x, z);
+            const bool outerWorld = std::fabs(static_cast<float>(x)) > 105.0f;
+            const bool guaranteedForest = outerWorld
+                && (std::abs(x / xSpacing + z / zSpacing) % 5 != 0);
+            if (!guaranteedForest && placement < 0.16f)
+            {
+                continue;
+            }
+
+            const float offsetX = (treeScatterHash(x - 11, z + 7) - 0.5f) * 8.0f;
+            const float offsetZ = (treeScatterHash(x + 5, z + 19) - 0.5f) * 10.0f;
+            const float worldX = static_cast<float>(x) + offsetX;
+            const float worldZ = static_cast<float>(z) + offsetZ;
+            if (!clearForTree(worldX, worldZ))
+            {
+                continue;
+            }
+
+            const float size = 1.75f + treeScatterHash(x + 17, z - 31) * 2.45f;
+            all.push_back({worldX, worldZ, size});
+        }
+    }
+
+    // Dense, clearly visible forest clusters in the open world between the
+    // farms and the distant terrain.
+    for (int side : {-1, 1})
+    {
+        for (int cluster = 0; cluster < 12; ++cluster)
+        {
+            const float centerX = static_cast<float>(side) *
+                (125.0f + static_cast<float>(cluster % 3) * 55.0f);
+            const float centerZ = -420.0f + static_cast<float>(cluster) * 120.0f;
+
+            for (int row = -3; row <= 3; ++row)
+            {
+                for (int column = -3; column <= 3; ++column)
+                {
+                    const float worldX = centerX
+                        + static_cast<float>(column) * 10.0f;
+                    const float worldZ = centerZ
+                        + static_cast<float>(row) * 11.0f;
+                    const float size = 1.80f + treeScatterHash(
+                        cluster * 17 + row, column - side * 13) * 2.20f;
+                    if (clearForTree(worldX, worldZ))
+                    {
+                        all.push_back({worldX, worldZ, size});
+                    }
+                }
+            }
+        }
+    }
+
+    if (all.empty())
+    {
+        return;
+    }
+
+    // Group the trees into square chunks so whole groups can be skipped.
+    float minX = all[0].x;
+    float maxX = all[0].x;
+    float minZ = all[0].z;
+    float maxZ = all[0].z;
+    for (const TreeInstance& tree : all)
+    {
+        minX = std::min(minX, tree.x);
+        maxX = std::max(maxX, tree.x);
+        minZ = std::min(minZ, tree.z);
+        maxZ = std::max(maxZ, tree.z);
+    }
+
+    const int columns = static_cast<int>((maxX - minX) / kTreeChunkSize) + 1;
+    const int rows = static_cast<int>((maxZ - minZ) / kTreeChunkSize) + 1;
+    gTreeChunks.assign(static_cast<std::size_t>(columns) * rows, TreeChunk{});
+
+    for (const TreeInstance& tree : all)
+    {
+        const int column = static_cast<int>((tree.x - minX) / kTreeChunkSize);
+        const int row = static_cast<int>((tree.z - minZ) / kTreeChunkSize);
+        gTreeChunks[static_cast<std::size_t>(row) * columns + column].trees.push_back(tree);
+    }
+
+    for (TreeChunk& chunk : gTreeChunks)
+    {
+        if (chunk.trees.empty())
+        {
+            continue;
+        }
+
+        float cMinX = chunk.trees[0].x;
+        float cMaxX = cMinX;
+        float cMinZ = chunk.trees[0].z;
+        float cMaxZ = cMinZ;
+        for (const TreeInstance& tree : chunk.trees)
+        {
+            cMinX = std::min(cMinX, tree.x);
+            cMaxX = std::max(cMaxX, tree.x);
+            cMinZ = std::min(cMinZ, tree.z);
+            cMaxZ = std::max(cMaxZ, tree.z);
+        }
+
+        const float halfX = (cMaxX - cMinX) * 0.5f;
+        const float halfZ = (cMaxZ - cMinZ) * 0.5f;
+        chunk.centerX = (cMinX + cMaxX) * 0.5f;
+        chunk.centerZ = (cMinZ + cMaxZ) * 0.5f;
+        chunk.centerY = kTreeCullMargin * 0.4f;
+        chunk.radius = std::sqrt(halfX * halfX + halfZ * halfZ) + kTreeCullMargin;
+    }
 }
 }
 
@@ -170,6 +527,24 @@ void Scene::update(float deltaTime)
 
 void Scene::render() const
 {
+    // Work out what is on screen once per frame.
+    warmUpDrawing();
+    captureFrustum();
+
+    constexpr float farmScale = 0.78f;
+    constexpr float farmSpacing = 34.0f;
+    constexpr float farmSideOffset = 38.0f;
+
+    for (int row = -2; row <= 3; ++row)
+    {
+        const float z = static_cast<float>(row) * farmSpacing;
+        const int layoutIndex = (row + 2) * 2;
+        gFarmVisible[layoutIndex] =
+            sphereVisible(-farmSideOffset, 5.0f, z, kFarmCullRadius);
+        gFarmVisible[layoutIndex + 1] =
+            sphereVisible(farmSideOffset, 5.0f, z, kFarmCullRadius);
+    }
+
     renderGround();
     renderRoad();
     PowerSubstation::drawRoadUtilities(animation_.waterTime());
@@ -181,19 +556,24 @@ void Scene::render() const
     renderCropWorkers();
     // Keep the full substation visible beside the central road, just beyond
     // the roadside utility poles and outside the traffic lane.
-    PowerSubstation::draw(16.0f, 0.0f, 0.90f, animation_.waterTime());
+    if (sphereVisible(16.0f, 4.0f, 0.0f, 28.0f))
+    {
+        PowerSubstation::draw(16.0f, 0.0f, 0.90f, animation_.waterTime());
+    }
 
     // Enlarge each complete farm while retaining a wide road corridor.
-    constexpr float farmScale = 0.78f;
-    constexpr float farmSpacing = 34.0f;
-    constexpr float farmSideOffset = 38.0f;
-
     for (int row = -2; row <= 3; ++row)
     {
         const float z = static_cast<float>(row) * farmSpacing;
         const int layoutIndex = (row + 2) * 2;
-        renderFarm(-farmSideOffset, z, farmScale, farmLayouts_[layoutIndex]);
-        renderFarm(farmSideOffset, z, farmScale, farmLayouts_[layoutIndex + 1]);
+        if (gFarmVisible[layoutIndex])
+        {
+            renderFarm(-farmSideOffset, z, farmScale, farmLayouts_[layoutIndex]);
+        }
+        if (gFarmVisible[layoutIndex + 1])
+        {
+            renderFarm(farmSideOffset, z, farmScale, farmLayouts_[layoutIndex + 1]);
+        }
     }
 
     Sky::drawSun();
@@ -203,10 +583,22 @@ void Scene::render() const
 
 void Scene::renderBarns() const
 {
-    Barn::draw(-65.0f, -68.0f, 1.02f, -4.0f, true);
-    Barn::draw(65.0f, -34.0f, 0.96f, 5.0f, false);
-    Barn::draw(-65.0f, 34.0f, 1.08f, -2.0f, true);
-    Barn::draw(65.0f, 68.0f, 1.00f, 7.0f, true);
+    if (sphereVisible(-65.0f, 6.0f, -68.0f, 26.0f))
+    {
+        Barn::draw(-65.0f, -68.0f, 1.02f, -4.0f, true);
+    }
+    if (sphereVisible(65.0f, 6.0f, -34.0f, 26.0f))
+    {
+        Barn::draw(65.0f, -34.0f, 0.96f, 5.0f, false);
+    }
+    if (sphereVisible(-65.0f, 6.0f, 34.0f, 26.0f))
+    {
+        Barn::draw(-65.0f, 34.0f, 1.08f, -2.0f, true);
+    }
+    if (sphereVisible(65.0f, 6.0f, 68.0f, 26.0f))
+    {
+        Barn::draw(65.0f, 68.0f, 1.00f, 7.0f, true);
+    }
 }
 
 void Scene::renderCropWorkers() const
@@ -222,6 +614,11 @@ void Scene::renderCropWorkers() const
         for (int side = 0; side < 2; ++side)
         {
             const int workerIndex = layoutIndex + side;
+            if (!gFarmVisible[workerIndex])
+            {
+                continue;
+            }
+
             glPushMatrix();
             glTranslatef(
                 side == 0 ? -farmSideOffset : farmSideOffset,
@@ -244,116 +641,36 @@ void Scene::renderCropWorkers() const
 
 void Scene::renderScatteredTrees() const
 {
-    // Reuse the original tree model while filling the enlarged terrain.
-    // The central exclusion corridor keeps trees away from the road and poles.
-    constexpr int minCoordinate = -450;
-    constexpr int maxCoordinate = 450;
-    constexpr int xSpacing = 14;
-    constexpr int zSpacing = 18;
-    constexpr float roadClearance = 14.0f;
-    constexpr float farmSideOffset = 38.0f;
-    constexpr float farmSpacing = 34.0f;
-
-    const auto clearForTree = [&](float x, float z)
+    // Tree placement is computed once; each frame only the chunks that are in
+    // view are drawn.
+    if (!gTreeChunksBuilt)
     {
-        if (std::fabs(x) < roadClearance)
-        {
-            return false;
-        }
-
-        // Keep the enlarged farm footprints, including their crop fields,
-        // houses, fences, and equipment, free of world-scattered trees.
-        for (int row = -2; row <= 3; ++row)
-        {
-            const float farmZ = static_cast<float>(row) * farmSpacing;
-            if (std::fabs(z - farmZ) < 19.0f &&
-                std::fabs(std::fabs(x) - farmSideOffset) < 23.0f)
-            {
-                return false;
-            }
-        }
-
-        // Preserve open space around ponds, barns, the substation, and the sun.
-        const float landmarks[][3] = {
-            {-72.0f, -42.0f, 25.0f},
-            { 73.0f,  24.0f, 27.0f},
-            {-71.0f,  58.0f, 23.0f},
-            {-65.0f, -68.0f, 14.0f},
-            { 65.0f, -34.0f, 14.0f},
-            {-65.0f,  34.0f, 14.0f},
-            { 65.0f,  68.0f, 14.0f},
-            { 70.0f,  92.0f, 17.0f},
-            {-10.0f, -18.0f, 10.0f}};
-        for (const auto& landmark : landmarks)
-        {
-            const float dx = x - landmark[0];
-            const float dz = z - landmark[1];
-            if (dx * dx + dz * dz < landmark[2] * landmark[2])
-            {
-                return false;
-            }
-        }
-
-        return true;
-    };
-
-    for (int x = minCoordinate; x <= maxCoordinate; x += xSpacing)
-    {
-        for (int z = minCoordinate; z <= maxCoordinate; z += zSpacing)
-        {
-            const float placement = treeScatterHash(x, z);
-            const bool outerWorld = std::fabs(static_cast<float>(x)) > 105.0f;
-            const bool guaranteedForest = outerWorld
-                && (std::abs(x / xSpacing + z / zSpacing) % 5 != 0);
-            if (!guaranteedForest && placement < 0.16f)
-            {
-                continue;
-            }
-
-            const float offsetX = (treeScatterHash(x - 11, z + 7) - 0.5f) * 8.0f;
-            const float offsetZ = (treeScatterHash(x + 5, z + 19) - 0.5f) * 10.0f;
-            const float worldX = static_cast<float>(x) + offsetX;
-            const float worldZ = static_cast<float>(z) + offsetZ;
-            if (!clearForTree(worldX, worldZ))
-            {
-                continue;
-            }
-
-            const float size = 1.75f + treeScatterHash(x + 17, z - 31) * 2.45f;
-            Vegetation::drawTree(
-                worldX,
-                worldZ,
-                size);
-        }
+        buildTreeChunks();
     }
 
-    // Add dense, clearly visible forest clusters in the open world between
-    // the farms and the distant terrain. These are separate from farm-local
-    // trees and use the same reusable tree model.
-    for (int side : {-1, 1})
+    for (TreeChunk& chunk : gTreeChunks)
     {
-        for (int cluster = 0; cluster < 12; ++cluster)
+        if (chunk.trees.empty()
+            || !sphereVisible(chunk.centerX, chunk.centerY, chunk.centerZ, chunk.radius))
         {
-            const float centerX = static_cast<float>(side) *
-                (125.0f + static_cast<float>(cluster % 3) * 55.0f);
-            const float centerZ = -420.0f + static_cast<float>(cluster) * 120.0f;
+            continue;
+        }
 
-            for (int row = -3; row <= 3; ++row)
+        const auto drawChunk = [&chunk]()
+        {
+            for (const TreeInstance& tree : chunk.trees)
             {
-                for (int column = -3; column <= 3; ++column)
-                {
-                    const float worldX = centerX
-                        + static_cast<float>(column) * 10.0f;
-                    const float worldZ = centerZ
-                        + static_cast<float>(row) * 11.0f;
-                    const float size = 1.80f + treeScatterHash(
-                        cluster * 17 + row, column - side * 13) * 2.20f;
-                    if (clearForTree(worldX, worldZ))
-                    {
-                        Vegetation::drawTree(worldX, worldZ, size);
-                    }
-                }
+                Vegetation::drawTree(tree.x, tree.z, tree.size);
             }
+        };
+
+        if (kCacheVegetation)
+        {
+            cachedList(chunk.list, drawChunk);
+        }
+        else
+        {
+            drawChunk();
         }
     }
 }
@@ -361,9 +678,18 @@ void Scene::renderScatteredTrees() const
 void Scene::renderPonds() const
 {
     // Keep the enlarged farms and ponds separated from the central road.
-    Pond::draw(-72.0f, -42.0f, 23.0f, 16.0f, animation_.waterTime(),        false);
-    Pond::draw( 73.0f,  24.0f, 25.0f, 17.0f, animation_.waterTime() + 1.4f, true);
-    Pond::draw(-71.0f,  58.0f, 21.0f, 15.0f, animation_.waterTime() + 2.8f, false);
+    if (sphereVisible(-72.0f, 0.0f, -42.0f, 30.0f))
+    {
+        Pond::draw(-72.0f, -42.0f, 23.0f, 16.0f, animation_.waterTime(),        false);
+    }
+    if (sphereVisible(73.0f, 0.0f, 24.0f, 32.0f))
+    {
+        Pond::draw( 73.0f,  24.0f, 25.0f, 17.0f, animation_.waterTime() + 1.4f, true);
+    }
+    if (sphereVisible(-71.0f, 0.0f, 58.0f, 28.0f))
+    {
+        Pond::draw(-71.0f,  58.0f, 21.0f, 15.0f, animation_.waterTime() + 2.8f, false);
+    }
 }
 
 void Scene::renderFarmers() const
@@ -384,7 +710,8 @@ void Scene::renderRoadTractors() const
 
     for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
     {
-        if (tractorTrafficActive_[index])
+        if (tractorTrafficActive_[index]
+            && sphereVisible(0.0f, 2.0f, roadTractorZ_[index], 14.0f))
         {
             tractor_.drawRoadTractor(roadTractorZ_[index], colors[index]);
         }
@@ -393,49 +720,59 @@ void Scene::renderRoadTractors() const
 
 void Scene::renderGround() const
 {
-    glDisable(GL_LIGHTING);
-    glColor3f(0.20f, 0.50f, 0.20f);
+    // The ground never changes, so it is recorded once and replayed.
+    static GLuint groundList = 0;
 
-    glPushMatrix();
-    glTranslatef(0.0f, -0.02f, 0.0f);
-    glScalef(1.0f, 1.0f, 0.85f);
-    // Oversized terrain gives the camera a continuous horizon beyond the
-    // designed farm area.
-    Primitives::drawPlane(1000.0f, 1000.0f);
-    glPopMatrix();
-
-    glLineWidth(1.0f);
-    glBegin(GL_LINES);
-    // Keep a light reference grid without spending a draw call on every
-    // single world unit across the entire expanded map.
-    for (int coordinate = -110; coordinate <= 110; coordinate += 5)
+    cachedList(groundList, [this]()
     {
-        const float value = static_cast<float>(coordinate);
-        glColor3f(0.24f, 0.56f, 0.24f);
-        glVertex3f(value, 0.01f, -110.0f);
-        glVertex3f(value, 0.01f, 110.0f);
-        glVertex3f(-110.0f, 0.01f, value);
-        glVertex3f(110.0f, 0.01f, value);
-    }
-    glEnd();
+        glDisable(GL_LIGHTING);
+        glColor3f(0.20f, 0.50f, 0.20f);
+
+        glPushMatrix();
+        glTranslatef(0.0f, -0.02f, 0.0f);
+        glScalef(1.0f, 1.0f, 0.85f);
+        // Oversized terrain gives the camera a continuous horizon beyond the
+        // designed farm area.
+        Primitives::drawPlane(1000.0f, 1000.0f);
+        glPopMatrix();
+
+ 
+        // Keep a light reference grid without spending a draw call on every
+        // single world unit across the entire expanded map.
+        for (int coordinate = -110; coordinate <= 110; coordinate += 5)
+        {
+            const float value = static_cast<float>(coordinate);
+            glColor3f(0.24f, 0.56f, 0.24f);
+            glVertex3f(value, 0.01f, -110.0f);
+            glVertex3f(value, 0.01f, 110.0f);
+            glVertex3f(-110.0f, 0.01f, value);
+            glVertex3f(110.0f, 0.01f, value);
+        }
+        glEnd();
+    });
 }
 
 void Scene::renderRoad() const
 {
-    glDisable(GL_LIGHTING);
+    static GLuint roadList = 0;
 
-    glColor3f(0.22f, 0.22f, 0.20f);
-    glPushMatrix();
-    glTranslatef(0.0f, 0.045f, 0.0f);
-    Primitives::drawPlane(9.0f, 1000.0f);
-    glPopMatrix();
+    cachedList(roadList, [this]()
+    {
+        glDisable(GL_LIGHTING);
 
-    glColor3f(0.86f, 0.75f, 0.24f);
-    glPushMatrix();
-    glTranslatef(0.0f, 0.06f, 0.0f);
-    glScalef(0.12f, 1.0f, 1000.0f);
-    Primitives::drawCube(1.0f, 0.02f, 0.035f);
-    glPopMatrix();
+        glColor3f(0.22f, 0.22f, 0.20f);
+        glPushMatrix();
+        glTranslatef(0.0f, 0.045f, 0.0f);
+        Primitives::drawPlane(9.0f, 1000.0f);
+        glPopMatrix();
+
+        glColor3f(0.86f, 0.75f, 0.24f);
+        glPushMatrix();
+        glTranslatef(0.0f, 0.06f, 0.0f);
+        glScalef(0.12f, 1.0f, 1000.0f);
+        Primitives::drawCube(1.0f, 0.02f, 0.035f);
+        glPopMatrix();
+    });
 }
 
 void Scene::renderFarm(
@@ -446,20 +783,53 @@ void Scene::renderFarm(
     glScalef(scale, scale, scale);
     glRotatef(layout.rotation, 0.0f, 1.0f, 0.0f);
 
-    glPushMatrix();
-    glTranslatef(layout.cropOffsetX, 0.0f, layout.cropOffsetZ);
-    renderCropField();
-    renderCrops();
-    glPopMatrix();
+    // Farms never change layout after construction, so the static parts are
+    // recorded once per farm. The animated parts (animals, house, tractor,
+    // windmill) are still drawn live, in the original order.
+    const std::ptrdiff_t farmIndex = &layout - &farmLayouts_[0];
+    const bool cacheable = farmIndex >= 0 && farmIndex < kFarmListCount;
+    static GLuint farmLists[kFarmListCount][3] = {};
 
-    const float treePositions[5][2] = {
-        {-18.0f, -13.0f}, {-12.0f, -16.0f}, {18.0f, -13.0f},
-        {19.0f, 1.0f}, {-18.0f, 9.0f}};
-    const float treeScales[5] = {1.75f, 1.35f, 1.55f, 1.20f, 1.60f};
-    for (int tree = 0; tree < layout.treeCount; ++tree)
+    // Part A: crop field, crops and trees.
+    const auto drawFieldAndTrees = [&]()
     {
-        Vegetation::drawTree(
-            treePositions[tree][0], treePositions[tree][1], treeScales[tree]);
+        glPushMatrix();
+        glTranslatef(layout.cropOffsetX, 0.0f, layout.cropOffsetZ);
+        renderCropField();
+        renderCrops();
+        glPopMatrix();
+
+        const float treePositions[5][2] = {
+            {-18.0f, -13.0f}, {-12.0f, -16.0f}, {18.0f, -13.0f},
+            {19.0f, 1.0f}, {-18.0f, 9.0f}};
+        const float treeScales[5] = {1.75f, 1.35f, 1.55f, 1.20f, 1.60f};
+        for (int tree = 0; tree < layout.treeCount; ++tree)
+        {
+            Vegetation::drawTree(
+                treePositions[tree][0], treePositions[tree][1], treeScales[tree]);
+        }
+    };
+
+    // Part B: path and fence.
+    const auto drawPathAndBoundary = [&]()
+    {
+        renderPath();
+        renderBoundary();
+    };
+
+    // Part C: rocks.
+    const auto drawRocks = [&]()
+    {
+        renderRocks();
+    };
+
+    if (cacheable && kCacheVegetation)
+    {
+        cachedList(farmLists[farmIndex][0], drawFieldAndTrees);
+    }
+    else
+    {
+        drawFieldAndTrees();
     }
 
     const float animalPositions[2][4] = {
@@ -483,8 +853,14 @@ void Scene::renderFarm(
             chickenPositions[chicken][2], chickenPositions[chicken][3]);
     }
 
-    renderPath();
-    renderBoundary();
+    if (cacheable)
+    {
+        cachedList(farmLists[farmIndex][1], drawPathAndBoundary);
+    }
+    else
+    {
+        drawPathAndBoundary();
+    }
 
     glPushMatrix();
     glTranslatef(layout.houseOffsetX, 0.0f, layout.houseOffsetZ);
@@ -500,7 +876,15 @@ void Scene::renderFarm(
         Windmill::drawWindmill(
             -14.0f, 1.0f, animation_.windmillAngle(), 1.15f);
     }
-    renderRocks();
+
+    if (cacheable)
+    {
+        cachedList(farmLists[farmIndex][2], drawRocks);
+    }
+    else
+    {
+        drawRocks();
+    }
 
     glPopMatrix();
 }
