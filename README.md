@@ -15,6 +15,7 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - A reference cube rendered with a model transformation
 - Mouse-look camera rotation
 - Fast smooth camera movement with WASD and Q/E vertical controls
+- Ambient, diffuse, and specular lighting for the 3D scene
 - Extended terrain, road, and utility lines for a fake infinite-world horizon
 - Phase 2 farm ground, crop region, and boundary fence
 - Phase 3 low-polygon farmhouse built from OpenGL primitives

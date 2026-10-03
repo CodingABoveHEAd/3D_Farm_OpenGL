@@ -37,10 +37,23 @@ float treeScatterHash(int x, int z)
 // works, but the vegetation is redrawn live every frame.
 constexpr bool kCacheVegetation = true;
 
+// Master switch for every display list in this file (ground, road, trees,
+// farm parts). If the window still comes up white or crashes, set this to
+// false: the scene then draws exactly as before the optimization, only
+// slower, and it tells us whether display lists are the problem.
+constexpr bool kUseDisplayLists = true;
+
 constexpr int   kFarmListCount     = 12;
 constexpr float kFarmCullRadius    = 32.0f;
 constexpr float kTreeChunkSize     = 60.0f;
 constexpr float kTreeCullMargin    = 18.0f;
+
+// Optional draw distances. 0 means unlimited, which keeps the scene exactly
+// as designed. If the frame rate is still too low on a CPU-only machine, try
+// something like 350 for trees and 400 for farms: far objects are skipped
+// entirely. Leave both at 0 to change nothing visually.
+constexpr float kTreeMaxDistance = 0.0f;
+constexpr float kFarmMaxDistance = 0.0f;
 
 // ---------------------------------------------------------------------------
 // View frustum culling
@@ -56,6 +69,7 @@ struct Frustum
 Frustum gFrustum{};
 bool gFrustumValid = false;
 bool gFarmVisible[kFarmListCount] = {};
+float gEye[3] = {0.0f, 0.0f, 0.0f};
 
 void captureFrustum()
 {
@@ -63,6 +77,12 @@ void captureFrustum()
     GLfloat view[16];
     glGetFloatv(GL_PROJECTION_MATRIX, proj);
     glGetFloatv(GL_MODELVIEW_MATRIX, view);
+
+    // Camera position from the view matrix (eye = -R^T * t); only used by the
+    // optional draw-distance limits above.
+    gEye[0] = -(view[0] * view[12] + view[1] * view[13] + view[2] * view[14]);
+    gEye[1] = -(view[4] * view[12] + view[5] * view[13] + view[6] * view[14]);
+    gEye[2] = -(view[8] * view[12] + view[9] * view[13] + view[10] * view[14]);
 
     // clip = projection * modelview (both column-major)
     float clip[16];
@@ -141,6 +161,20 @@ bool sphereVisible(float x, float y, float z, float radius)
     return true;
 }
 
+// True when the optional distance limit is off or the object is inside it.
+bool withinDistance(float x, float z, float maxDistance, float radius)
+{
+    if (maxDistance <= 0.0f)
+    {
+        return true;
+    }
+
+    const float dx = x - gEye[0];
+    const float dz = z - gEye[2];
+    const float limit = maxDistance + radius;
+    return dx * dx + dz * dz <= limit * limit;
+}
+
 // ---------------------------------------------------------------------------
 // Display-list helper
 // ---------------------------------------------------------------------------
@@ -149,6 +183,13 @@ bool sphereVisible(float x, float y, float z, float radius)
 template <typename Body>
 void cachedList(GLuint& list, Body&& body)
 {
+    // Master switch: false draws everything live (no display lists at all).
+    if (!kUseDisplayLists)
+    {
+        body();
+        return;
+    }
+
     if (list == 0)
     {
         list = glGenLists(1);
@@ -382,6 +423,15 @@ void buildTreeChunks()
         chunk.radius = std::sqrt(halfX * halfX + halfZ * halfZ) + kTreeCullMargin;
     }
 }
+
+void drawTreeChunk(const TreeChunk& chunk)
+{
+    for (const TreeInstance& tree : chunk.trees)
+    {
+        Vegetation::drawTree(tree.x, tree.z, tree.size);
+    }
+}
+
 }
 
 Scene::Scene()
@@ -527,8 +577,9 @@ void Scene::update(float deltaTime)
 
 void Scene::render() const
 {
-    // Work out what is on screen once per frame.
     warmUpDrawing();
+
+    // Work out what is on screen once per frame.
     captureFrustum();
 
     constexpr float farmScale = 0.78f;
@@ -540,13 +591,34 @@ void Scene::render() const
         const float z = static_cast<float>(row) * farmSpacing;
         const int layoutIndex = (row + 2) * 2;
         gFarmVisible[layoutIndex] =
-            sphereVisible(-farmSideOffset, 5.0f, z, kFarmCullRadius);
+            sphereVisible(-farmSideOffset, 5.0f, z, kFarmCullRadius)
+            && withinDistance(-farmSideOffset, z, kFarmMaxDistance, kFarmCullRadius);
         gFarmVisible[layoutIndex + 1] =
-            sphereVisible(farmSideOffset, 5.0f, z, kFarmCullRadius);
+            sphereVisible(farmSideOffset, 5.0f, z, kFarmCullRadius)
+            && withinDistance(farmSideOffset, z, kFarmMaxDistance, kFarmCullRadius);
     }
 
     renderGround();
     renderRoad();
+    // Ground and road use their original flat colors; apply material lighting
+    // to the three-dimensional world objects that follow.
+    lighting_.apply();
+
+    // Defensive reset of fixed-function state that earlier draws (the sun
+    // and clouds are drawn at the END of every frame) can leave behind and
+    // that would otherwise carry into the next frame's lit objects:
+    //  - a leftover white EMISSION material turns every lit surface flat white
+    //  - a leftover texture makes surfaces sample a glow texture
+    //  - normals must be renormalised because the scene uses glScalef
+    const GLfloat noEmission[] = {0.0f, 0.0f, 0.0f, 1.0f};
+    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEmission);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_NORMALIZE);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glEnable(GL_COLOR_MATERIAL);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+
     PowerSubstation::drawRoadUtilities(animation_.waterTime());
     renderScatteredTrees();
     renderPonds();
@@ -651,26 +723,20 @@ void Scene::renderScatteredTrees() const
     for (TreeChunk& chunk : gTreeChunks)
     {
         if (chunk.trees.empty()
-            || !sphereVisible(chunk.centerX, chunk.centerY, chunk.centerZ, chunk.radius))
+            || !sphereVisible(chunk.centerX, chunk.centerY, chunk.centerZ, chunk.radius)
+            || !withinDistance(
+                chunk.centerX, chunk.centerZ, kTreeMaxDistance, chunk.radius))
         {
             continue;
         }
 
-        const auto drawChunk = [&chunk]()
-        {
-            for (const TreeInstance& tree : chunk.trees)
-            {
-                Vegetation::drawTree(tree.x, tree.z, tree.size);
-            }
-        };
-
         if (kCacheVegetation)
         {
-            cachedList(chunk.list, drawChunk);
+            cachedList(chunk.list, [&chunk]() { drawTreeChunk(chunk); });
         }
         else
         {
-            drawChunk();
+            drawTreeChunk(chunk);
         }
     }
 }
@@ -723,7 +789,7 @@ void Scene::renderGround() const
     // The ground never changes, so it is recorded once and replayed.
     static GLuint groundList = 0;
 
-    cachedList(groundList, [this]()
+    cachedList(groundList, []()
     {
         glDisable(GL_LIGHTING);
         glColor3f(0.20f, 0.50f, 0.20f);
@@ -732,23 +798,9 @@ void Scene::renderGround() const
         glTranslatef(0.0f, -0.02f, 0.0f);
         glScalef(1.0f, 1.0f, 0.85f);
         // Oversized terrain gives the camera a continuous horizon beyond the
-        // designed farm area.
+        // designed farm area. The old reference grid is gone.
         Primitives::drawPlane(1000.0f, 1000.0f);
         glPopMatrix();
-
- 
-        // Keep a light reference grid without spending a draw call on every
-        // single world unit across the entire expanded map.
-        for (int coordinate = -110; coordinate <= 110; coordinate += 5)
-        {
-            const float value = static_cast<float>(coordinate);
-            glColor3f(0.24f, 0.56f, 0.24f);
-            glVertex3f(value, 0.01f, -110.0f);
-            glVertex3f(value, 0.01f, 110.0f);
-            glVertex3f(-110.0f, 0.01f, value);
-            glVertex3f(110.0f, 0.01f, value);
-        }
-        glEnd();
     });
 }
 
@@ -756,7 +808,7 @@ void Scene::renderRoad() const
 {
     static GLuint roadList = 0;
 
-    cachedList(roadList, [this]()
+    cachedList(roadList, []()
     {
         glDisable(GL_LIGHTING);
 

@@ -106,7 +106,6 @@ void Application::cursorPositionCallback(GLFWwindow* window, double xPosition, d
 
 void Application::renderFrame(float)
 {
-    glDisable(GL_LIGHTING);
     Sky::setClearColor(scene_.isNight());
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     camera_.applyView();
