@@ -4,6 +4,7 @@
 
 #include <GLFW/glfw3.h>
 
+#include <algorithm>
 #include <cmath>
 #include <initializer_list>
 
@@ -40,6 +41,14 @@ constexpr Color kHayBand    {0.55f, 0.42f, 0.14f};
 constexpr Color kWood       {0.38f, 0.22f, 0.09f};  // fence, cart, barrel
 constexpr Color kDarkWood   {0.26f, 0.14f, 0.05f};
 constexpr Color kIron       {0.07f, 0.07f, 0.06f};
+constexpr Color kFloor      {0.34f, 0.25f, 0.15f};
+constexpr Color kFloorLine  {0.23f, 0.15f, 0.08f};
+constexpr Color kBeam       {0.25f, 0.13f, 0.045f};
+constexpr Color kTrough     {0.31f, 0.19f, 0.08f};
+constexpr Color kFeed       {0.57f, 0.43f, 0.15f};
+constexpr Color kTool       {0.18f, 0.18f, 0.17f};
+constexpr Color kChest      {0.42f, 0.23f, 0.08f};
+constexpr Color kLamp       {1.00f, 0.76f, 0.35f};
 }  // namespace palette
 
 // ---------------------------------------------------------------------------
@@ -59,8 +68,8 @@ constexpr float kBattenSpacing  = 0.625f;
 constexpr float kBattenSize     = 0.14f;
 constexpr float kBattenRelief   = 0.06f;
 constexpr float kDoorHeight     = 4.2f;
-constexpr float kDoorLeafWidth  = 3.55f;
-constexpr float kDoorCenterX    = 2.25f;
+constexpr float kDoorLeafWidth  = 3.35f;
+constexpr float kDoorwayHalfW   = 3.35f;
 }  // namespace dim
 
 float degToRad(float deg) { return deg * dim::kPi / 180.0f; }
@@ -165,7 +174,28 @@ void drawWalls()
     const float d = dim::kHalfDepth * 2.0f;
     const float h = dim::kWallHeight;
 
-    drawBox(palette::kWall, {0.0f, h * 0.5f, 0.0f}, {w, h, d});
+    // A true shell instead of a solid cube: from inside the barn the wall
+    // faces, roof structure and entrance remain visible and the doorway is
+    // physically open. The thin slabs are lit on both sides by Lighting.
+    drawBox(palette::kWall, {0.0f, h * 0.5f, dim::kHalfDepth},
+            {w, h, 0.18f});
+    drawBox(palette::kWall, {-dim::kHalfWidth, h * 0.5f, 0.0f},
+            {0.18f, h, d});
+    drawBox(palette::kWall, { dim::kHalfWidth, h * 0.5f, 0.0f},
+            {0.18f, h, d});
+
+    const float sideWidth = dim::kHalfWidth - dim::kDoorwayHalfW;
+    for (float side : {-1.0f, 1.0f})
+    {
+        drawBox(palette::kWall,
+                {side * (dim::kDoorwayHalfW + sideWidth * 0.5f),
+                 h * 0.5f, -dim::kHalfDepth},
+                {sideWidth, h, 0.18f});
+    }
+    drawBox(palette::kWall,
+            {0.0f, dim::kDoorHeight + (h - dim::kDoorHeight) * 0.5f,
+             -dim::kHalfDepth},
+            {dim::kDoorwayHalfW * 2.0f, h - dim::kDoorHeight, 0.18f});
 
     // Triangular gable ends sit just proud of the box so they do not z-fight.
     drawGable(-dim::kHalfDepth - 0.01f, -1.0f);
@@ -195,6 +225,8 @@ void drawBattens()
     {
         for (float sz : {-1.0f, 1.0f})
         {
+            if (sz < 0.0f && std::fabs(x) < dim::kDoorwayHalfW)
+                continue;
             drawBox(palette::kBatten,
                     {x, centerY, sz * (dim::kHalfDepth + dim::kBattenRelief * 0.5f)},
                     {dim::kBattenSize, height, dim::kBattenRelief});
@@ -251,7 +283,7 @@ void drawRoof()
     }
 }
 
-void drawFrontDoors()
+void drawFrontDoors(float openAmount)
 {
     const float z = -dim::kHalfDepth - 0.08f;
     const float cy = dim::kDoorHeight * 0.5f;
@@ -263,7 +295,9 @@ void drawFrontDoors()
 
     for (float side : {-1.0f, 1.0f})
     {
-        const float cx = side * dim::kDoorCenterX;
+        const float closedX = side * dim::kDoorLeafWidth * 0.5f;
+        const float openX = side * (dim::kHalfWidth + dim::kDoorLeafWidth * 0.46f);
+        const float cx = closedX + (openX - closedX) * openAmount;
 
         // Door leaf.
         drawBox(palette::kDoor, {cx, cy, z}, {dim::kDoorLeafWidth, dim::kDoorHeight, 0.14f});
@@ -288,7 +322,7 @@ void drawFrontDoors()
     // Overhead track the sliding doors hang from.
     drawBox(palette::kIron,
             {0.0f, dim::kDoorHeight + 0.18f, z - 0.15f},
-            {dim::kDoorCenterX * 4.0f, 0.10f, 0.10f});
+            {dim::kHalfWidth * 2.0f + dim::kDoorLeafWidth, 0.10f, 0.10f});
 }
 
 void drawSideDoor()
@@ -348,6 +382,158 @@ void drawHayBales()
             }
         }
     }
+}
+
+void drawInteriorStructure()
+{
+    // Packed-earth aisle with timber sleepers. The clear central strip runs
+    // directly from the front doors to the hay and rear work area.
+    drawBox(palette::kFloor, {0.0f, dim::kFoundationH + 0.025f, 0.0f},
+            {9.55f, 0.05f, 7.55f});
+    for (float z = -3.55f; z <= 3.55f; z += 0.52f)
+        drawBox(palette::kFloorLine, {0.0f, dim::kFoundationH + 0.055f, z},
+                {9.45f, 0.018f, 0.035f});
+
+    // Posts, tie beams, diagonal braces and roof purlins make the load path
+    // believable rather than leaving the roof floating over an empty room.
+    for (float z : {-3.25f, 0.0f, 3.25f})
+    {
+        for (float x : {-4.25f, 4.25f})
+        {
+            drawBox(palette::kBeam, {x, 2.75f, z}, {0.28f, 5.5f, 0.28f});
+            drawBoxRotatedZ(palette::kBeam,
+                            {x * 0.88f, 4.65f, z}, {1.45f, 0.18f, 0.20f},
+                            x < 0.0f ? 38.0f : -38.0f);
+        }
+        drawBox(palette::kBeam, {0.0f, 5.05f, z}, {8.65f, 0.25f, 0.25f});
+        for (float side : {-1.0f, 1.0f})
+            drawBoxRotatedZ(palette::kBeam,
+                            {side * 2.18f, 6.18f, z},
+                            {5.15f, 0.20f, 0.20f}, -side * dim::kRoofPitchDeg);
+    }
+
+    // Livestock stalls occupy the sides; the 3.4-unit centre aisle and front
+    // threshold remain free for the camera and wheelbarrow.
+    for (float side : {-1.0f, 1.0f})
+    {
+        for (float z : {-2.15f, 0.15f, 2.45f})
+        {
+            drawBox(palette::kBeam, {side * 2.25f, 1.05f, z},
+                    {0.16f, 2.1f, 0.16f});
+            drawBox(palette::kWood, {side * 3.58f, 0.82f, z},
+                    {2.7f, 0.13f, 0.13f});
+            drawBox(palette::kWood, {side * 3.58f, 1.42f, z},
+                    {2.7f, 0.13f, 0.13f});
+        }
+
+        // Long feed trough against each stall row.
+        drawBox(palette::kTrough, {side * 2.75f, 0.58f, 0.2f},
+                {0.72f, 0.42f, 5.8f});
+        drawBox(palette::kFeed, {side * 2.75f, 0.81f, 0.2f},
+                {0.57f, 0.08f, 5.45f});
+    }
+
+    // Rear storage shelves and compact farm tools, deliberately kept out of
+    // the central walking route.
+    for (float y : {1.0f, 2.05f, 3.10f})
+        drawBox(palette::kWood, {-3.55f, y, 3.55f}, {2.35f, 0.16f, 0.58f});
+    for (float x : {-4.45f, -2.65f})
+        drawBox(palette::kDarkWood, {x, 1.65f, 3.55f}, {0.16f, 3.3f, 0.16f});
+    for (float x : {-4.35f, -3.95f, -3.55f, -3.15f, -2.75f})
+        drawBox(palette::kHay, {x, 2.28f, 3.45f}, {0.28f, 0.30f, 0.38f});
+
+    // Shovel and pitchfork hanging beside the shelf.
+    drawBoxRotatedZ(palette::kWood, {-4.52f, 2.25f, 3.18f},
+                    {0.08f, 2.55f, 0.08f}, -8.0f);
+    drawBoxRotatedZ(palette::kTool, {-4.34f, 1.02f, 3.16f},
+                    {0.42f, 0.34f, 0.06f}, -8.0f);
+    drawBoxRotatedZ(palette::kWood, {-2.58f, 2.25f, 3.18f},
+                    {0.07f, 2.55f, 0.07f}, 7.0f);
+    for (float dx : {-0.12f, 0.0f, 0.12f})
+        drawBox(palette::kTool, {-2.58f + dx, 3.52f, 3.18f},
+                {0.035f, 0.36f, 0.035f});
+}
+
+void drawWheelbarrow(float offset, float wheelRotation)
+{
+    glPushMatrix();
+    glTranslatef(0.65f, 0.0f, -0.15f + offset);
+
+    // Tray and flared side boards.
+    drawBox(palette::kIron, {0.0f, 0.92f, 0.0f}, {1.15f, 0.18f, 1.55f});
+    for (float side : {-1.0f, 1.0f})
+        drawBoxRotatedZ(palette::kTool, {side * 0.55f, 1.18f, 0.0f},
+                        {0.12f, 0.58f, 1.48f}, -side * 16.0f);
+    drawBox(palette::kTool, {0.0f, 1.15f, 0.72f}, {1.12f, 0.52f, 0.10f});
+
+    // Handles point toward the rear (+Z); legs stop the tray tipping.
+    for (float side : {-1.0f, 1.0f})
+    {
+        drawBox(palette::kWood, {side * 0.43f, 0.72f, 1.10f},
+                {0.10f, 0.10f, 2.00f});
+        drawBoxRotatedZ(palette::kWood, {side * 0.43f, 0.36f, 0.68f},
+                        {0.09f, 0.70f, 0.09f}, side * 8.0f);
+    }
+
+    glColor3f(palette::kIron.r, palette::kIron.g, palette::kIron.b);
+    glPushMatrix();
+    glTranslatef(0.0f, 0.43f, -1.02f);
+    glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
+    glRotatef(wheelRotation, 0.0f, 0.0f, 1.0f);
+    Primitives::drawCylinder(0.38f, 0.20f, 18);
+    glPopMatrix();
+    glPopMatrix();
+}
+
+void drawStorageChest(float openAmount)
+{
+    const Vec3 base{-3.75f, 0.77f, 1.90f};
+    drawBox(palette::kChest, base, {1.55f, 0.62f, 0.82f});
+    drawBox(palette::kIron, {base.x, base.y, base.z - 0.43f},
+            {0.15f, 0.48f, 0.05f});
+    for (float x : {-4.35f, -3.15f})
+        drawBox(palette::kIron, {x, base.y, base.z}, {0.07f, 0.66f, 0.86f});
+
+    // Lid rotates around its rear edge without changing position when the
+    // target is reversed halfway through the animation.
+    glPushMatrix();
+    glTranslatef(base.x, 1.10f, base.z + 0.39f);
+    glRotatef(-92.0f * openAmount, 1.0f, 0.0f, 0.0f);
+    glTranslatef(0.0f, 0.0f, -0.39f);
+    drawBox(palette::kChest, {0.0f, 0.0f, 0.0f}, {1.62f, 0.16f, 0.84f});
+    glPopMatrix();
+}
+
+void drawFeedingGate(float openAmount)
+{
+    glPushMatrix();
+    glTranslatef(2.18f, 0.0f, -2.20f);
+    glRotatef(-82.0f * openAmount, 0.0f, 1.0f, 0.0f);
+    for (float y : {0.55f, 1.15f, 1.75f})
+        drawBox(palette::kWood, {1.15f, y, 0.0f}, {2.3f, 0.13f, 0.13f});
+    for (float x : {0.08f, 1.15f, 2.22f})
+        drawBox(palette::kBeam, {x, 1.15f, 0.0f}, {0.13f, 1.85f, 0.13f});
+    glPopMatrix();
+    drawBox(palette::kIron, {2.15f, 1.15f, -2.20f}, {0.20f, 2.15f, 0.20f});
+}
+
+void drawInteriorLamp(float amount)
+{
+    drawBox(palette::kIron, {0.0f, 4.98f, 0.0f}, {0.08f, 0.38f, 0.08f});
+    drawBox(palette::kTool, {0.0f, 4.72f, 0.0f}, {0.58f, 0.12f, 0.58f});
+    glPushAttrib(GL_LIGHTING_BIT | GL_CURRENT_BIT);
+    const GLfloat emission[] = {
+        palette::kLamp.r * amount, palette::kLamp.g * amount,
+        palette::kLamp.b * amount, 1.0f};
+    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+    glColor3f(0.22f + 0.78f * amount,
+              0.20f + 0.56f * amount,
+              0.16f + 0.18f * amount);
+    glPushMatrix();
+    glTranslatef(0.0f, 4.54f, 0.0f);
+    Primitives::drawSphere(0.20f, 12, 8);
+    glPopMatrix();
+    glPopAttrib();
 }
 
 void drawEquipment()
@@ -428,33 +614,55 @@ void drawFence(float halfWidth, float halfDepth)
         }
     }
 }
+
+void drawStaticBarn(bool fenced)
+{
+    drawFoundation();
+    drawWalls();
+    drawBattens();
+    drawRoof();
+    drawInteriorStructure();
+    drawSideDoor();
+    drawHayloftDoor();
+    drawWindows();
+    drawHayBales();
+    drawEquipment();
+    if (fenced)
+        drawFence(7.0f, 6.0f);
+}
+
+void drawCachedStaticBarn(bool fenced)
+{
+    static GLuint lists[2] = {0, 0};
+    const int index = fenced ? 1 : 0;
+    if (lists[index] == 0)
+    {
+        lists[index] = glGenLists(1);
+        glNewList(lists[index], GL_COMPILE);
+        drawStaticBarn(fenced);
+        glEndList();
+    }
+    glCallList(lists[index]);
+}
 }  // namespace
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-void Barn::draw(float x, float z, float scale, float rotation, bool fenced)
+void Barn::draw(float x, float z, float scale, float rotation, bool fenced,
+                const Barn::State& state)
 {
     glPushMatrix();
     glTranslatef(x, 0.0f, z);
     glRotatef(rotation, 0.0f, 1.0f, 0.0f);
     glScalef(scale, scale, scale);
 
-    drawFoundation();
-    drawWalls();
-    drawBattens();
-    drawRoof();
-    drawFrontDoors();
-    drawSideDoor();
-    drawHayloftDoor();
-    drawWindows();
-    drawHayBales();
-    drawEquipment();
-
-    if (fenced)
-    {
-        drawFence(7.0f, 6.0f);
-    }
+    drawCachedStaticBarn(fenced);
+    drawFrontDoors(std::clamp(state.doorOpen, 0.0f, 1.0f));
+    drawWheelbarrow(state.wheelbarrowOffset, state.wheelRotation);
+    drawStorageChest(std::clamp(state.chestOpen, 0.0f, 1.0f));
+    drawFeedingGate(std::clamp(state.feedingGateOpen, 0.0f, 1.0f));
+    drawInteriorLamp(std::clamp(state.electricLight, 0.0f, 1.0f));
 
     glPopMatrix();
 }

@@ -18,6 +18,7 @@ public:
     float yawDegrees() const { return yaw_; }
     float pitchDegrees() const { return pitch_; }
     void setPose(float x, float y, float z, float yaw, float pitch);
+    void setPosition(float x, float y, float z);
 
 private:
     float position_[3]{0.0f, 4.0f, 10.0f};

@@ -34,6 +34,10 @@ public:
     float workerSpeed() const { return workerSpeedScale_; }
     std::size_t cropWorkerCount() const { return cropWorkers_.size(); }
     float minimumTrafficGap() const;
+    void resolveCameraCollision(float previousX, float previousZ,
+                                float cameraY, float& proposedX,
+                                float& proposedZ) const;
+    bool areBarnDoorsOpen() const { return barnDoorsTargetOpen_; }
 
 private:
     struct FarmLayout
@@ -100,5 +104,13 @@ private:
     float powerAmount_ = 1.0f;
     float workerSpeedTarget_ = 1.0f;
     float workerSpeedScale_ = 1.0f;
+    bool barnDoorsTargetOpen_ = false;
+    bool barnChestTargetOpen_ = false;
+    bool barnGateTargetOpen_ = false;
+    float barnDoorAmount_ = 0.0f;
+    float barnChestAmount_ = 0.0f;
+    float barnGateAmount_ = 0.0f;
+    float barnWheelbarrowOffset_ = 0.0f;
+    float barnWheelRotation_ = 0.0f;
     std::mt19937 trafficRng_;
 };

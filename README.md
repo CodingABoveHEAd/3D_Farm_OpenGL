@@ -68,13 +68,24 @@ The tractor is implemented in [Tractor.cpp](src/objects/Tractor.cpp). Its comple
 
 ## Phase 8 Sky and Clouds
 
-The sky background uses the existing clear color set by the application. A low-polygon sphere is rendered as the sun in [sky.cpp](src/objects/sky.cpp). Each cloud in [cloud.cpp](src/objects/cloud.cpp) is a small hierarchy of three overlapping spheres.
+The sky is a camera-centred gradient dome. The sun in
+[sky.cpp](src/objects/sky.cpp) is a viewer-facing distant disk with a soft,
+restrained glow; it shares `DayNightSettings::SunPosition` with the daylight
+direction, fades through the day/night transition, and never writes scene
+depth. Each cloud in [cloud.cpp](src/objects/cloud.cpp) is a small hierarchy of
+overlapping spheres.
 
 Cloud translation is controlled by `Animation::cloudOffset()`. Every frame, `Animation::update(deltaTime)` increases the offset by `0.8 * deltaTime`, so movement remains smooth and frame-rate independent. When the offset passes `28`, it wraps to `-28`, keeping clouds inside a repeating world-space range without accumulating an unbounded position.
 
 ## Animals
 
-[Animals.cpp](src/objects/Animals.cpp) provides the reusable `Animals::drawCow(x, z, scale, rotation)` function. Each cow is built hierarchically from a body, patches, lowered neck and head, muzzle, ears, horns, eyes, four legs with hooves, and a tail. Three cows are placed in the open pasture with different world positions, scales, and rotations. They are static grazing poses; no new animal animation was added.
+[Animals.cpp](src/objects/Animals.cpp) provides the reusable animated cow.
+Each cow has a proportioned barrel, chest and rump, individual hide markings,
+articulated grazing neck, muzzle, ears, horns, blinking eyes, grounded legs,
+cloven hooves, udder and fly-swatting tail. Cows use position-derived timing so
+they lower their heads, chew, flick their ears and occasionally look up at
+different times; all motion comes from the shared frame-rate-independent scene
+clock.
 
 ## Multiple Farms and Road
 
@@ -119,10 +130,19 @@ point prevent repetitive, overlapping pedestrian arrivals.
 
 ## Barns
 
-Four rural barns are placed around the outer farm areas. Each barn is built
-hierarchically from a large body, two sloped roof slabs, large front doors, a
-side door, windows, structural beams, hay bales, and small nearby equipment.
-Several barns also have their own surrounding fence.
+Four rural barns are placed around the outer farm areas. Each is now a real
+wall shell rather than a solid box, with an accessible front opening, visible
+two-sided roof, packed-earth timber floor, posts, tie beams, roof supports,
+side stalls, feeding troughs, a clear centre aisle, hay, shelves and hanging
+tools. The front doors slide along an overhead track and camera collision
+follows their animated opening, so a closed door blocks entry and an open one
+admits the camera. Exterior and pendant lights provide warm night illumination
+and fade with load shedding.
+
+Three manual interior interactions share the barn architecture: a bounded
+wheelbarrow with matching wheel rotation, a hinged storage chest, and a hinged
+feeding gate. Their animations reverse smoothly and remain usable without
+grid power. Several barns also retain their surrounding fence.
 
 Each farm receives a stable random population of zero to three crop workers at
 startup. Crop workers move between nearby crop rows, pause their walking, and
@@ -157,6 +177,9 @@ Five bonfire clearings contain stone rings, crossed logs, embers, animated
 flames, restrained smoke and sparks, and small groups of shared articulated
 villagers. Their warm night lights remain independent of grid power. `B`
 toggles all bonfire sites without affecting traffic or other animation.
+All reusable benches, stools and split-log seats share one seat-surface height;
+the seated pelvis, thighs, knees and grounded feet are authored against that
+height so idle gestures do not push bodies through the furniture.
 
 ## Controls
 
@@ -173,6 +196,10 @@ toggles all bonfire sites without affecting traffic or other animation.
 - `N`: toggle day/night mode (one toggle per key press)
 - `T`: pause/resume road traffic (one toggle per key press)
 - `B`: show/hide the five bonfire gatherings (one toggle per key press)
+- `G`: open/close all barn sliding doors (one toggle per key press; reversible)
+- `Z`, `X`: roll the barn wheelbarrow toward the entrance/rear while held
+- `C`: open/close the barn storage chest (one toggle per key press)
+- `F`: open/close the barn feeding gate (one toggle per key press)
 - `L`: toggle load shedding; grid lights switch and windmills coast to a stop
 - `O`: pause/resume crop workers independently
 - `[`, `]`: decrease/increase crop-worker animation speed

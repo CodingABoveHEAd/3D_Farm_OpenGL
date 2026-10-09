@@ -107,6 +107,9 @@ bool Application::initialize(int width, int height, const char* title)
     windowSmokeStartTime_ = previousTime_;
     windowSmokeTest_ = std::getenv("FARM_WINDOW_SMOKE_TEST") != nullptr;
 
+    std::cout
+        << "BARN_CONTROLS G=doors Z/X=wheelbarrow C=chest F=feeding_gate\n";
+
     if (const char* seconds = std::getenv("FARM_BENCHMARK_SECONDS"))
     {
         benchmarkDuration_ = std::max(0.0, std::strtod(seconds, nullptr));
@@ -163,7 +166,15 @@ void Application::run()
         }
 
         scene_.handleInput();
+        const float previousCameraX = camera_.posX();
+        const float previousCameraZ = camera_.posZ();
         camera_.update(window_, deltaTime);
+        float resolvedCameraX = camera_.posX();
+        float resolvedCameraZ = camera_.posZ();
+        scene_.resolveCameraCollision(
+            previousCameraX, previousCameraZ, camera_.posY(),
+            resolvedCameraX, resolvedCameraZ);
+        camera_.setPosition(resolvedCameraX, camera_.posY(), resolvedCameraZ);
         scene_.update(deltaTime);
         renderFrame(deltaTime);
 
@@ -295,6 +306,7 @@ void Application::updatePerformanceStats(double now)
               << (scene_.isTrafficRunning() ? " | Traffic ON" : " | Traffic PAUSED")
               << (scene_.areBonfiresEnabled() ? " | Fires ON" : " | Fires OFF")
               << (scene_.areWorkersPaused() ? " | Workers PAUSED" : " | Workers ON")
+              << (scene_.areBarnDoorsOpen() ? " | Barn OPEN" : " | Barn CLOSED")
               << " x" << std::setprecision(2) << scene_.workerSpeed();
         glfwSetWindowTitle(window_, title.str().c_str());
         statsFrameCount_ = 0;

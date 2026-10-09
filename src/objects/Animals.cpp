@@ -472,15 +472,18 @@ void drawCow(float x, float z, float scale, float rotation, float animationTime)
 {
     const float t        = animationTime;
     const float seed     = x * 0.37f + z * 0.23f;
+    const int coatVariant = std::abs(static_cast<int>(seed * 10.0f)) % 3;
+    const float grazeRate = 0.34f
+        + 0.13f * (0.5f + 0.5f * std::sin(seed * 2.17f));
     const float grazeWave = 0.5f + 0.5f * std::sin(
-        t * 0.42f + x * 0.31f + z * 0.17f);
+        t * grazeRate + x * 0.31f + z * 0.17f);
     const float grazing = clamp01((grazeWave - 0.20f) / 0.42f);
     const float flySwat = std::pow(std::max(0.0f, std::sin(t * 0.73f + seed)), 10.0f);
     const float tailSway = 7.0f * std::sin(t * 1.15f + seed) + 20.0f * flySwat;
     const float earFlick = 18.0f * std::pow(
         std::max(0.0f, std::sin(t * 0.61f + seed * 1.7f)), 16.0f);
     const float headBob  = 0.03f * std::sin(t * 0.9f + seed)
-        + (1.0f - grazing) * 0.58f;
+        + (1.0f - grazing) * 0.90f;
     const float breath   = 1.0f + 0.012f * std::sin(t * 1.3f + seed);
     const float chew     = grazing * 5.0f * std::sin(t * 4.5f + seed);
     const float blinkCycle = std::fmod(t * 0.29f + std::fabs(seed), 1.0f);
@@ -516,12 +519,21 @@ void drawCow(float x, float z, float scale, float rotation, float animationTime)
     drawEllipsoid(kHideDark, { 0.55f, 2.45f,  1.05f}, {0.22f, 0.16f, 0.24f});
 
     // --- Patches (different on each flank) ---
-    drawPatch(kPatch,     0.90f, 2.00f, -0.30f, 0.65f, 0.45f);
-    drawPatch(kPatch,     0.86f, 1.55f,  0.70f, 0.40f, 0.32f);
-    drawPatch(kPatchAlt, -0.90f, 1.85f,  0.35f, 0.75f, 0.50f);
-    drawPatch(kPatch,    -0.80f, 2.25f, -0.90f, 0.42f, 0.32f);
-    drawEllipsoid(kPatchAlt, {0.60f, 2.30f, 1.30f}, {0.32f, 0.30f, 0.40f});
-    drawEllipsoid(kPatch,    {0.20f, 2.58f, 0.30f}, {0.42f, 0.12f, 0.50f});                    // back
+    drawPatch(kPatch, 0.90f, 2.00f, -0.30f, 0.65f, 0.45f);
+    if (coatVariant != 1)
+        drawPatch(kPatch, 0.86f, 1.55f, 0.70f, 0.40f, 0.32f);
+    if (coatVariant != 2)
+        drawPatch(kPatchAlt, -0.90f, 1.85f, 0.35f, 0.75f, 0.50f);
+    if (coatVariant == 0)
+        drawPatch(kPatch, -0.80f, 2.25f, -0.90f, 0.42f, 0.32f);
+    else if (coatVariant == 1)
+        drawPatch(kPatchAlt, -0.86f, 1.55f, -0.62f, 0.52f, 0.40f);
+    else
+        drawPatch(kPatch, -0.88f, 2.02f, 0.82f, 0.58f, 0.36f);
+    if (coatVariant != 2)
+        drawEllipsoid(kPatchAlt, {0.60f, 2.30f, 1.30f}, {0.32f, 0.30f, 0.40f});
+    if (coatVariant != 1)
+        drawEllipsoid(kPatch, {0.20f, 2.58f, 0.30f}, {0.42f, 0.12f, 0.50f});
 
     // --- Head, ears, horns ---
     // A small grazed patch makes the feeding action readable at a distance.

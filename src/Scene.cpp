@@ -24,6 +24,12 @@ float randomTrafficTime(std::mt19937& rng, float minimum, float maximum)
     return distribution(rng);
 }
 
+float approach(float value, float target, float maximumStep)
+{
+    if (value < target) return std::min(target, value + maximumStep);
+    return std::max(target, value - maximumStep);
+}
+
 float treeScatterHash(int x, int z)
 {
     const float value = std::sin(
@@ -628,6 +634,18 @@ void Scene::handleInput()
     {
         bonfiresEnabled_ = !bonfiresEnabled_;
     }
+    if (Input::wasPressed(GLFW_KEY_G))
+    {
+        barnDoorsTargetOpen_ = !barnDoorsTargetOpen_;
+    }
+    if (Input::wasPressed(GLFW_KEY_C))
+    {
+        barnChestTargetOpen_ = !barnChestTargetOpen_;
+    }
+    if (Input::wasPressed(GLFW_KEY_F))
+    {
+        barnGateTargetOpen_ = !barnGateTargetOpen_;
+    }
     if (Input::wasPressed(GLFW_KEY_LEFT_BRACKET))
     {
         workerSpeedTarget_ = std::max(
@@ -663,6 +681,33 @@ void Scene::update(float deltaTime)
     PowerSubstation::setPowerAmount(powerAmount_);
     Cloud::setNightAmount(lighting_.nightAmount());
     tractor_.setNightAmount(lighting_.nightAmount());
+
+    // Barn mechanisms are manual and stay responsive during load shedding
+    // and while ambient scene animation is paused. Linear approach permits a
+    // target reversal at any point without snapping the mechanism.
+    barnDoorAmount_ = approach(
+        barnDoorAmount_, barnDoorsTargetOpen_ ? 1.0f : 0.0f,
+        deltaTime * 0.58f);
+    barnChestAmount_ = approach(
+        barnChestAmount_, barnChestTargetOpen_ ? 1.0f : 0.0f,
+        deltaTime * 1.25f);
+    barnGateAmount_ = approach(
+        barnGateAmount_, barnGateTargetOpen_ ? 1.0f : 0.0f,
+        deltaTime * 1.05f);
+
+    const float wheelInput =
+        (Input::isDown(GLFW_KEY_X) ? 1.0f : 0.0f)
+        - (Input::isDown(GLFW_KEY_Z) ? 1.0f : 0.0f);
+    const float oldWheelbarrow = barnWheelbarrowOffset_;
+    barnWheelbarrowOffset_ = std::clamp(
+        barnWheelbarrowOffset_ + wheelInput * deltaTime * 1.15f,
+        -1.35f, 1.10f);
+    constexpr float wheelDegreesPerUnit = 150.78f; // 180 / (pi * 0.38)
+    barnWheelRotation_ = std::fmod(
+        barnWheelRotation_
+            - (barnWheelbarrowOffset_ - oldWheelbarrow) * wheelDegreesPerUnit,
+        360.0f);
+
     animation_.update(deltaTime);
     if (animation_.isPaused())
     {
@@ -830,7 +875,7 @@ void Scene::render() const
 
 void Scene::applyNightLights() const
 {
-    std::array<Lighting::LocalLight, 32> lights{};
+    std::array<Lighting::LocalLight, 48> lights{};
     std::size_t count = 0;
     const auto addPoint = [&](float x, float y, float z,
                               const float color[3], float linear, float quadratic)
@@ -881,6 +926,10 @@ void Scene::applyNightLights() const
         addPoint(barn.x + std::sin(angle) * localZ, 4.55f * barn.scale,
                  barn.z + std::cos(angle) * localZ,
                  DayNightSettings::WarmLamp, 0.055f, 0.012f);
+        // Interior pendant, ranked independently from the entrance fixture.
+        // Both are supplied by the grid and fade with load shedding.
+        addPoint(barn.x, 4.54f * barn.scale, barn.z,
+                 DayNightSettings::WarmLamp, 0.050f, 0.010f);
     }
 
     constexpr float farmScale = 0.78f;
@@ -904,9 +953,12 @@ void Scene::applyNightLights() const
 
     if (bonfiresEnabled_)
     {
-        constexpr float fireLight[] = {1.0f, 0.30f, 0.055f};
         for (int site = 0; site < VillageSimulationSettings::BonfireSiteCount; ++site)
         {
+            const float flicker = 0.88f + 0.12f * std::sin(
+                animation_.waterTime() * 8.3f + static_cast<float>(site) * 1.7f);
+            const float fireLight[] = {
+                1.0f * flicker, 0.30f * flicker, 0.055f * flicker};
             addIndependentPoint(
                 VillageSimulationSettings::BonfireSiteX[site], 1.2f,
                 VillageSimulationSettings::BonfireSiteZ[site],
@@ -1097,23 +1149,92 @@ void Scene::renderNightLightPools() const
     glPopAttrib();
 }
 
+void Scene::resolveCameraCollision(float previousX, float previousZ,
+                                   float cameraY, float& proposedX,
+                                   float& proposedZ) const
+{
+    struct BarnCollider { float x, z, scale, rotation; };
+    constexpr BarnCollider barns[] = {
+        {-65.0f, -68.0f, 1.02f, -4.0f},
+        { 65.0f, -34.0f, 0.96f,  5.0f},
+        {-65.0f,  34.0f, 1.08f, -2.0f},
+        { 65.0f,  68.0f, 1.00f,  7.0f}};
+
+    for (const BarnCollider& barn : barns)
+    {
+        if (cameraY < 0.15f || cameraY > 7.7f * barn.scale)
+            continue;
+
+        const float dx = proposedX - previousX;
+        const float dz = proposedZ - previousZ;
+        const float travel = std::sqrt(dx * dx + dz * dz);
+        const int samples = std::max(
+            1, static_cast<int>(std::ceil(travel / (0.14f * barn.scale))));
+        const float radians = barn.rotation * 3.14159265358979323846f / 180.0f;
+        const float c = std::cos(radians);
+        const float s = std::sin(radians);
+        const float cameraRadius = 0.38f / barn.scale;
+        const float wallBand = cameraRadius + 0.12f;
+        const float openingHalf = std::min(3.35f, 4.86f * barnDoorAmount_);
+
+        for (int sample = 1; sample <= samples; ++sample)
+        {
+            const float t = static_cast<float>(sample)
+                / static_cast<float>(samples);
+            const float wx = previousX + dx * t - barn.x;
+            const float wz = previousZ + dz * t - barn.z;
+            // Inverse of the translate/rotate/scale used by Barn::draw.
+            const float lx = (c * wx - s * wz) / barn.scale;
+            const float lz = (s * wx + c * wz) / barn.scale;
+
+            const bool besideWall =
+                std::fabs(std::fabs(lx) - 5.0f) < wallBand
+                && lz > -4.0f - wallBand && lz < 4.0f + wallBand;
+            const bool atBack =
+                std::fabs(lz - 4.0f) < wallBand
+                && std::fabs(lx) < 5.0f + wallBand;
+            const bool withinDoorOpening =
+                std::fabs(lx) < std::max(0.0f, openingHalf - cameraRadius);
+            const bool atFront =
+                std::fabs(lz + 4.0f) < wallBand
+                && std::fabs(lx) < 5.0f + wallBand
+                && !withinDoorOpening;
+
+            if (besideWall || atBack || atFront)
+            {
+                proposedX = previousX;
+                proposedZ = previousZ;
+                return;
+            }
+        }
+    }
+}
+
 void Scene::renderBarns() const
 {
+    Barn::State barnState;
+    barnState.doorOpen = barnDoorAmount_;
+    barnState.wheelbarrowOffset = barnWheelbarrowOffset_;
+    barnState.wheelRotation = barnWheelRotation_;
+    barnState.chestOpen = barnChestAmount_;
+    barnState.feedingGateOpen = barnGateAmount_;
+    barnState.electricLight = lighting_.nightAmount() * powerAmount_;
+
     if (sphereVisible(-65.0f, 6.0f, -68.0f, 26.0f))
     {
-        Barn::draw(-65.0f, -68.0f, 1.02f, -4.0f, true);
+        Barn::draw(-65.0f, -68.0f, 1.02f, -4.0f, true, barnState);
     }
     if (sphereVisible(65.0f, 6.0f, -34.0f, 26.0f))
     {
-        Barn::draw(65.0f, -34.0f, 0.96f, 5.0f, false);
+        Barn::draw(65.0f, -34.0f, 0.96f, 5.0f, false, barnState);
     }
     if (sphereVisible(-65.0f, 6.0f, 34.0f, 26.0f))
     {
-        Barn::draw(-65.0f, 34.0f, 1.08f, -2.0f, true);
+        Barn::draw(-65.0f, 34.0f, 1.08f, -2.0f, true, barnState);
     }
     if (sphereVisible(65.0f, 6.0f, 68.0f, 26.0f))
     {
-        Barn::draw(65.0f, 68.0f, 1.00f, 7.0f, true);
+        Barn::draw(65.0f, 68.0f, 1.00f, 7.0f, true, barnState);
     }
 }
 

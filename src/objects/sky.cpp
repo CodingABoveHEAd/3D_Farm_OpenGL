@@ -40,6 +40,27 @@ void dirOf(float az, float el, float& x, float& y, float& z)
     z = cosf(el) * cosf(az);
 }
 
+// Rotate a local XY disc so its +Z normal points back toward the origin. The
+// sky is rendered without camera translation, so the origin is always the
+// viewer and celestial bodies remain circular from every look direction.
+void faceViewer(float x, float y, float z)
+{
+    const float length = sqrtf(x * x + y * y + z * z);
+    if (length <= 0.0001f) return;
+    const float nx = -x / length;
+    const float ny = -y / length;
+    const float nz = -z / length;
+    const float clampedZ = fmaxf(-1.0f, fminf(1.0f, nz));
+    const float angle = acosf(clampedZ) * 180.0f / PI;
+    const float axisX = -ny;
+    const float axisY = nx;
+    const float axisLength = sqrtf(axisX * axisX + axisY * axisY);
+    if (axisLength > 0.0001f)
+        glRotatef(angle, axisX / axisLength, axisY / axisLength, 0.0f);
+    else if (nz < 0.0f)
+        glRotatef(180.0f, 1.0f, 0.0f, 0.0f);
+}
+
 // Sky colour for a direction. h = height (0 horizon .. 1 zenith),
 // s = how much the direction points at the sun (0..1).
 RGB skyColor(float h, float s)
@@ -176,43 +197,23 @@ void solidDisc(float radius, const RGB& centre, const RGB& rim,
 
 void drawSunBody(float animationTime, float opacity)
 {
-    const float t = animationTime;
+    (void)animationTime;
 
     // --- glow layers (additive, no depth writes) ---
     glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
-    glowDisc(10.0f, {1.00f, 0.80f, 0.40f}, 0.28f * opacity);
-    glowDisc( 6.0f, {1.00f, 0.88f, 0.50f}, 0.45f * opacity);
-    glowDisc( 3.6f, {1.00f, 0.95f, 0.70f}, 0.70f * opacity);
-
-    // --- slowly rotating rays ---
-    glPushMatrix();
-    glRotatef(t * 4.0f, 0.0f, 0.0f, 1.0f);
-    const int RAYS = 14;
-    glBegin(GL_TRIANGLES);
-    for (int i = 0; i < RAYS; ++i) {
-        float a  = 2.0f * PI * i / RAYS;
-        float w  = 0.10f;
-        float len = (i % 2 == 0) ? 7.5f : 5.5f;
-        glColor4f(1.0f, 0.92f, 0.55f, 0.35f * opacity);
-        glVertex3f(2.0f * cosf(a - w), 2.0f * sinf(a - w), 0.0f);
-        glVertex3f(2.0f * cosf(a + w), 2.0f * sinf(a + w), 0.0f);
-        glColor4f(1.0f, 0.92f, 0.55f, 0.0f);
-        glVertex3f(len * cosf(a), len * sinf(a), 0.0f);
-    }
-    glEnd();
-    glPopMatrix();
+    glowDisc(5.0f, {1.00f, 0.82f, 0.44f}, 0.12f * opacity);
+    glowDisc(3.0f, {1.00f, 0.90f, 0.58f}, 0.18f * opacity);
+    glowDisc(1.8f, {1.00f, 0.96f, 0.76f}, 0.25f * opacity);
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_TRUE);
-
-    // --- bright core ---
-    // Keep depth testing active so nearby scene geometry can occlude the sun.
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    solidDisc(2.0f, {1.00f, 0.99f, 0.85f}, {1.00f, 0.88f, 0.40f}, opacity);
+    // The sky is rendered before the world with depth writes disabled. World
+    // geometry therefore occludes the distant disc naturally and the sun can
+    // never leave a near-depth stamp that hides scene objects.
+    solidDisc(1.15f, {1.00f, 0.98f, 0.82f},
+              {1.00f, 0.86f, 0.42f}, opacity, 64);
     glDisable(GL_BLEND);
 }
 
@@ -274,6 +275,9 @@ void drawSun(float animationTime)
         glTranslatef(DayNightSettings::SunPosition[0],
                      DayNightSettings::SunPosition[1],
                      DayNightSettings::SunPosition[2]);
+        faceViewer(DayNightSettings::SunPosition[0],
+                   DayNightSettings::SunPosition[1],
+                   DayNightSettings::SunPosition[2]);
         drawSunBody(animationTime, 1.0f - gNightAmount);
         glPopMatrix();
     }
@@ -282,6 +286,9 @@ void drawSun(float animationTime)
         glTranslatef(DayNightSettings::MoonPosition[0],
                      DayNightSettings::MoonPosition[1],
                      DayNightSettings::MoonPosition[2]);
+        faceViewer(DayNightSettings::MoonPosition[0],
+                   DayNightSettings::MoonPosition[1],
+                   DayNightSettings::MoonPosition[2]);
         drawMoonBody(gNightAmount);
         glPopMatrix();
     }

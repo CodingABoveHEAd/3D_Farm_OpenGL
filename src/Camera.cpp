@@ -252,6 +252,13 @@ void Camera::setPose(float x, float y, float z, float yaw, float pitch)
     pitch_ = clampPitch(pitch);
 }
 
+void Camera::setPosition(float x, float y, float z)
+{
+    position_[0] = x;
+    position_[1] = y;
+    position_[2] = z;
+}
+
 void Camera::applySkyView() const
 {
     glMatrixMode(GL_MODELVIEW);

@@ -12,6 +12,11 @@
 namespace Village {
 namespace {
 constexpr float Pi = 3.14159265358979323846f;
+// Every reusable seat is authored to this surface height. The seated pelvis
+// starts exactly at the surface, avoiding per-location offsets and keeping
+// benches, tea-shop seats and bonfire logs on the same pose contract.
+constexpr float SeatSurfaceY = 0.96f;
+constexpr float SeatedHipY = SeatSurfaceY + 0.16f;
 // Static shop architecture is compiled into one display list per variant.
 // Set to false if Primitives creates its own lists lazily.
 constexpr bool UseDisplayLists = true;
@@ -318,7 +323,8 @@ void drawBenchStyled(float length, const Color& seat, const Color& leg, const Co
         box(leg, x, 0.42f, 0.0f, 0.22f, 0.82f, 0.72f);
         box(leg, x, 1.26f, -0.36f, 0.18f, 1.25f, 0.18f);
     }
-    box(seat, 0.0f, 0.86f, 0.02f, length, 0.20f, 0.78f);
+    box(seat, 0.0f, SeatSurfaceY - 0.10f, 0.02f,
+        length, 0.20f, 0.78f);
     for (float y : {1.22f, 1.58f})
         box(back, 0.0f, y, -0.43f, length, 0.23f, 0.16f);
     box(Metal, 0.0f, 0.72f, 0.02f, length + 0.12f, 0.08f, 0.08f);
@@ -656,7 +662,7 @@ void drawVillager(bool seated, float phase, float time, bool holdingCup,
     const float sip = holdingCup ? smooth01((sipWave - 0.30f) / 0.55f) : 0.0f;
     const float headTurn = std::sin(time * 0.31f + phase)
         * (driving ? 3.0f : 14.0f);
-    const float hipY = seated ? 1.12f : 1.45f;
+    const float hipY = seated ? SeatedHipY : 1.45f;
 
     // ---- Legs and shoes ----------------------------------------------------
     for (float side : {-1.0f, 1.0f})
@@ -1602,18 +1608,27 @@ void drawBonfireSite(int siteIndex, float animationTime, float nightAmount)
                    std::cos(a) * 1.35f, 0.23f, std::sin(a) * 1.35f,
                    0.34f, 0.22f, 0.30f, 7, 5);
         }
+        sphere({0.16f, 0.13f, 0.11f}, 0.0f, 0.22f, 0.0f,
+               1.02f, 0.10f, 1.02f, 10, 4);
         for (int log = 0; log < 4; ++log)
         {
-            glPushMatrix();
-            glRotatef(45.0f + static_cast<float>(log) * 45.0f,
-                      0.0f, 1.0f, 0.0f);
-            box(log % 2 ? Wood : WoodDark, 0.0f, 0.35f, 0.0f,
-                2.15f, 0.24f, 0.28f);
-            glPopMatrix();
+            const float a = (28.0f + static_cast<float>(log) * 47.0f)
+                * Pi / 180.0f;
+            const float x = std::cos(a) * 1.02f;
+            const float z = std::sin(a) * 1.02f;
+            const float y = 0.34f + 0.07f * static_cast<float>(log & 1);
+            strut(log % 2 ? Wood : WoodDark,
+                  -x, y, -z, x, y + 0.04f, z, 0.14f, 9);
+            sphere({0.10f, 0.075f, 0.045f}, -x, y, -z,
+                   0.15f, 0.15f, 0.15f, 7, 5);
+            sphere({0.10f, 0.075f, 0.045f}, x, y + 0.04f, z,
+                   0.15f, 0.15f, 0.15f, 7, 5);
         }
         // Split-log seats used by the two seated villagers.
-        box(WoodDark, -3.0f, 0.83f, 0.0f, 1.7f, 0.48f, 0.62f);
-        box(WoodDark,  3.0f, 0.83f, 0.0f, 1.7f, 0.48f, 0.62f);
+        box(WoodDark, -3.0f, SeatSurfaceY - 0.24f, 0.0f,
+            1.7f, 0.48f, 0.62f);
+        box(WoodDark,  3.0f, SeatSurfaceY - 0.24f, 0.0f,
+            1.7f, 0.48f, 0.62f);
         glEndList();
     }
 
@@ -1634,12 +1649,28 @@ void drawBonfireSite(int siteIndex, float animationTime, float nightAmount)
         0.52f + nightAmount * 0.45f, 0.18f + nightAmount * 0.20f,
         0.025f, 1.0f};
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
-    sphere({0.92f, 0.20f, 0.035f}, 0.0f, 0.82f, 0.0f,
-           0.72f * flickerA, 1.25f * flickerB, 0.68f * flickerA, 9, 6);
-    sphere({1.00f, 0.55f, 0.06f}, -0.18f, 0.92f, 0.05f,
-           0.40f * flickerB, 1.02f * flickerA, 0.38f * flickerB, 8, 5);
-    sphere({1.00f, 0.88f, 0.25f}, 0.12f, 0.72f, -0.08f,
-           0.25f * flickerA, 0.72f * flickerB, 0.24f * flickerA, 7, 5);
+    // A small ember bed remains readable between the crossed logs.
+    for (int ember = 0; ember < 8; ++ember)
+    {
+        const float a = static_cast<float>(ember) * 2.39996f;
+        const float pulse = 0.78f + 0.22f * std::sin(
+            animationTime * (5.2f + ember * 0.11f) + ember);
+        sphere({1.0f, 0.20f + 0.20f * pulse, 0.025f},
+               std::cos(a) * (0.25f + 0.05f * (ember & 1)), 0.43f,
+               std::sin(a) * (0.25f + 0.05f * (ember & 1)),
+               0.10f, 0.055f, 0.10f, 6, 4);
+    }
+
+    const float driftA = 0.12f * std::sin(animationTime * 6.7f + siteIndex);
+    const float driftB = 0.10f * std::sin(animationTime * 9.1f + siteIndex * 2.0f);
+    sphere({0.92f, 0.20f, 0.035f}, driftA, 0.82f, driftB,
+           0.66f * flickerA, 1.18f * flickerB, 0.62f * flickerA, 9, 6);
+    sphere({1.00f, 0.55f, 0.06f}, -0.18f - driftB, 0.94f, 0.05f,
+           0.36f * flickerB, 0.98f * flickerA, 0.34f * flickerB, 8, 5);
+    sphere({1.00f, 0.88f, 0.25f}, 0.12f + driftB, 0.72f, -0.08f,
+           0.23f * flickerA, 0.68f * flickerB, 0.22f * flickerA, 7, 5);
+    sphere({1.00f, 0.42f, 0.045f}, -0.30f + driftA, 1.14f, 0.10f,
+           0.18f * flickerB, 0.62f * flickerA, 0.16f * flickerB, 7, 5);
     const GLfloat noEmission[] = {0.0f, 0.0f, 0.0f, 1.0f};
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEmission);
 
