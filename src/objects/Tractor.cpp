@@ -1,8 +1,10 @@
 #include "objects/Tractor.h"
 
+#include "VillageSimulationSettings.h"
 #include "DayNightSettings.h"
 #include "Input.h"
 #include "graphics/Primitives.h"
+#include "objects/Village.h"
 
 #include <GLFW/glfw3.h>
 #include <algorithm>
@@ -113,9 +115,9 @@ void Tractor::update(float deltaTime)
         - (Input::isDown(GLFW_KEY_K) ? 1.0f : 0.0f);
     const float steering =
         (Input::isDown(GLFW_KEY_J) ? 1.0f : 0.0f)
-        - (Input::isDown(GLFW_KEY_L) ? 1.0f : 0.0f);
+        - (Input::isDown(GLFW_KEY_SEMICOLON) ? 1.0f : 0.0f);
 
-    // I/K are true forward/reverse controls. J/L steer the tractor instead
+    // I/K are true forward/reverse controls. J/; steer the tractor instead
     // of sliding it sideways, and reversing naturally reverses steering.
     if (throttle != 0.0f)
     {
@@ -144,25 +146,28 @@ void Tractor::update(float deltaTime)
 
 void Tractor::updateRoad(float deltaTime, float& z, float& wheelRotation)
 {
-    constexpr float speed = 5.5f;
     constexpr float wheelRadius = 0.85f;
-    z += speed * deltaTime;
+    const float distance = VillageSimulationSettings::TrafficSpeed * deltaTime;
+    z += distance;
     wheelRotation = std::fmod(
-        wheelRotation + speed * deltaTime / wheelRadius * 180.0f / Pi,
+        wheelRotation + distance / wheelRadius * 180.0f / Pi,
         360.0f);
-    if (z > 108.0f)
-    {
-        z = -108.0f;
-    }
+    const float routeLength = VillageSimulationSettings::TrafficRouteMaxZ
+        - VillageSimulationSettings::TrafficRouteMinZ;
+    while (z > VillageSimulationSettings::TrafficRouteMaxZ)
+        z -= routeLength;
 }
 
-void Tractor::drawRoadTractor(float z, float wheelRotation, Color color) const
+void Tractor::drawRoadTractor(float z, float wheelRotation, Color color,
+                              float animationTime, bool detailedDriver) const
 {
     const float oldX = position_[0];
     const float oldY = position_[1];
     const float oldZ = position_[2];
     const float oldHeading = heading_;
     const float oldWheelRotation = wheelRotation_;
+    const float oldDriverTime = roadDriverTime_;
+    const bool oldDriverDetail = detailedRoadDriver_;
     displayColor_ = color;
     position_[0] = 0.0f;
     position_[1] = 0.0f;
@@ -170,6 +175,8 @@ void Tractor::drawRoadTractor(float z, float wheelRotation, Color color) const
     // The detailed model faces -Z. Road traffic advances toward +Z.
     heading_ = 180.0f;
     wheelRotation_ = wheelRotation;
+    roadDriverTime_ = animationTime;
+    detailedRoadDriver_ = detailedDriver;
     glPushMatrix();
     glScalef(1.00f, 1.00f, 1.00f);
     drawTractor();
@@ -179,6 +186,8 @@ void Tractor::drawRoadTractor(float z, float wheelRotation, Color color) const
     position_[2] = oldZ;
     heading_ = oldHeading;
     wheelRotation_ = oldWheelRotation;
+    roadDriverTime_ = oldDriverTime;
+    detailedRoadDriver_ = oldDriverDetail;
     displayColor_ = Color::Red;
 }
 
@@ -262,6 +271,19 @@ void Tractor::drawTractor() const
     // Driver area
     drawSeat();
     drawSteeringWheel();
+    if (roadDriverTime_ >= 0.0f)
+    {
+        // The shared villager model faces +Z. Rotate it toward the tractor's
+        // -Z bonnet, seat the hips on the cushion, and scale it below the roof.
+        glPushMatrix();
+        glTranslatef(0.0f, 2.40f, 1.02f);
+        glRotatef(180.0f, 0.0f, 1.0f, 0.0f);
+        glScalef(0.65f, 0.65f, 0.65f);
+        Village::drawDriver(
+            roadDriverTime_, 2.4f + static_cast<float>(displayColor_) * 1.3f,
+            detailedRoadDriver_);
+        glPopMatrix();
+    }
 
     // Side steps
     drawStep(-1.65f);

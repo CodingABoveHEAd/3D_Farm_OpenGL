@@ -16,6 +16,7 @@ public:
 private:
     static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
     static void cursorPositionCallback(GLFWwindow* window, double xPosition, double yPosition);
+    static void windowFocusCallback(GLFWwindow* window, int focused);
     void toggleFullscreen();
     void setVerticalSync(bool enabled);
     void updatePerformanceStats(double now);

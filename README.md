@@ -14,7 +14,7 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - A 3D ground plane and verification grid
 - A reference cube rendered with a model transformation
 - Mouse-look camera rotation
-- Fast smooth camera movement with WASD and Q/E vertical controls
+- Heading-relative first-person movement with W/S, A/D turning, and Q/E vertical controls
 - Ambient, diffuse, and specular lighting for the 3D scene
 - Extended terrain, road, and utility lines for a fake infinite-world horizon
 - Phase 2 farm ground, crop region, and boundary fence
@@ -32,8 +32,8 @@ This project is being built incrementally with C++, GLFW, and legacy OpenGL comp
 - Per-farm layout variation with different tree, animal, tractor, and windmill arrangements
 - Very dense, enlarged forest belts and clusters throughout the complete open world while keeping the road clear
 - Very dense world-wide tree scattering includes roadside belts while landmark and farm footprints remain clear
-- Detailed red, green, blue, and brown tractors circulating on the central road
-- Probabilistic, independently staggered road traffic arrivals
+- Three detailed, driver-occupied tractors circulating on the central road
+- Evenly spaced road traffic with a pause/resume control
 - Detailed rural barns with roofs, doors, beams, hay, fences, and equipment
 - Enlarged world objects and landmarks for a fuller visual composition
 - Farmers tending the crop rows with repeated walking and working motions
@@ -64,7 +64,7 @@ The existing perimeter fence now has an entrance opening on the front side at ap
 
 ## Phase 6 Tractor
 
-The tractor is implemented in [Tractor.cpp](src/objects/Tractor.cpp). Its complete model is drawn under one root translation stored in `position_[3]`. The body, engine, cabin, roof, axles, wheels, and exhaust use local transforms relative to that root. Manual movement uses `I`, `J`, `K`, and `L`; wheel rotation changes only while the tractor is being moved.
+The tractor is implemented in [Tractor.cpp](src/objects/Tractor.cpp). Its complete model is drawn under one root translation stored in `position_[3]`. The body, engine, cabin, roof, axles, wheels, and exhaust use local transforms relative to that root. Manual movement uses `I`/`K` to drive and `J`/`;` to steer; wheel rotation changes only while the tractor is being moved.
 
 ## Phase 8 Sky and Clouds
 
@@ -105,15 +105,17 @@ their colors remain unchanged.
 ## Road Tractors
 
 The existing detailed tractor model is reused for road traffic rather than
-duplicated. Four scaled road tractors circulate along the central road in red,
-green, blue, and brown body variants. The original manually controlled farm
-tractor remains available with `I`, `J`, `K`, and `L`.
+duplicated. Three scaled road tractors circulate along the central road in red,
+green, and blue body variants. Every road vehicle contains a seated driver
+using the shared articulated villager model. The original manually controlled
+farm tractor remains available with `I`/`K` and `J`/`;`.
 
-Road farmers and tractors no longer follow a fixed synchronized pattern. Each
-traffic unit independently receives a randomized active travel duration and
-waiting interval, then re-enters from the road edge. The initial active states
-are staggered as well, so every application run produces a different traffic
-arrival sequence.
+Three road tractors form a continuously wrapped convoy. They share one speed
+and start 72 world units apart, so wrapping cannot cause a vehicle to respawn
+on top of another vehicle. `T` pauses or resumes traffic without changing its
+spacing. The roadside population was reduced to four possible pedestrians,
+only two of which start active. Longer waiting intervals and a guarded entry
+point prevent repetitive, overlapping pedestrian arrivals.
 
 ## Barns
 
@@ -122,10 +124,11 @@ hierarchically from a large body, two sloped roof slabs, large front doors, a
 side door, windows, structural beams, hay bales, and small nearby equipment.
 Several barns also have their own surrounding fence.
 
-Each farm also has a crop worker placed inside its field. Crop workers move
-between nearby crop rows, pause their walking, and continue with slower
-working motions so they appear to tend the plants rather than travel on the
-road.
+Each farm receives a stable random population of zero to three crop workers at
+startup. Crop workers move between nearby crop rows, pause their walking, and
+continue with slower working motions so they appear to tend the plants rather
+than travel on the road. `O` independently pauses field work, while `[` and
+`]` decrease or increase work speed.
 
 ## Ponds and Wooden Bridge
 
@@ -138,10 +141,27 @@ The bridge railing is sampled from a cubic Bezier curve. The implementation
 keeps the full curve equation in `src/objects/Pond.cpp` as a course-project
 comment and uses the sampled points to create connected wooden rail segments.
 
+## Environment and Bonfires
+
+Ground and road colours now respond to the day/night transition, with an
+additional restrained darkening during a nighttime power outage. The full
+road has segmented centre markings, entrance gaps, dirt shoulders, and subtle
+flat weathering patches placed above the surface to avoid z-fighting.
+
+Deterministic, chunk-culled grass fills suitable open terrain. Farm entrances,
+roads, paths, structures, ponds, and fire clearings remain unobstructed.
+Flowers around houses, flowering shrubs, and flowering trees add colour using
+cached low-polygon geometry.
+
+Five bonfire clearings contain stone rings, crossed logs, embers, animated
+flames, restrained smoke and sparks, and small groups of shared articulated
+villagers. Their warm night lights remain independent of grid power. `B`
+toggles all bonfire sites without affecting traffic or other animation.
+
 ## Controls
 
 - `W`, `S`: move forward/backward relative to the camera's current heading
-- `A`, `D`: strafe left/right relative to the camera's current heading
+- `A`, `D`: turn left/right in place (hold with `W` or `S` for curved movement)
 - `Q`, `E`: move vertically
 - `Left Shift`: move faster
 - `Left Ctrl`: move slowly for precise positioning
@@ -149,8 +169,13 @@ comment and uses the sampled points to create connected wooden rail segments.
 - Arrow keys: rotate the camera as an alternative
 - `R`: reset the camera
 - `I`, `K`: drive the tractor forward/backward
-- `J`, `L`: steer the tractor left/right while driving
+- `J`, `;`: steer the tractor left/right while driving (`L` controls grid power)
 - `N`: toggle day/night mode (one toggle per key press)
+- `T`: pause/resume road traffic (one toggle per key press)
+- `B`: show/hide the five bonfire gatherings (one toggle per key press)
+- `L`: toggle load shedding; grid lights switch and windmills coast to a stop
+- `O`: pause/resume crop workers independently
+- `[`, `]`: decrease/increase crop-worker animation speed
 - `P`: pause/resume all scene animation
 - `+`, `-`: adjust windmill speed
 - `F11`: toggle fullscreen while preserving the windowed size and position
@@ -158,8 +183,9 @@ comment and uses the sampled points to create connected wooden rail segments.
 - `Esc`: release a captured mouse; press again to exit
 
 The title bar reports current FPS, frame time, V-sync state, and window mode.
-WASD movement stays parallel to the ground even while looking up or down;
-combined directions are normalized so diagonal movement is not faster.
+It also reports grid-power, traffic, bonfire, and worker-pause state.
+W/S movement follows the camera heading and stays parallel to the ground even
+while looking up or down. Opposing movement or turn keys cancel each other.
 
 Night mode transitions smoothly over three seconds and adds a moon, stars,
 darker clouds, moonlight, warm building/street lighting, and headlights that
@@ -167,6 +193,12 @@ follow the moving road tractors. The transition continues while scene
 animation is paused. Visual and timing constants—including the transition
 duration, sky/fog colors, global light levels, and lamp colors—are centralized
 in `include/DayNightSettings.h`.
+
+Load shedding is independent of day/night mode: moonlight, stars, and vehicle
+headlights remain available, while farmhouse, shop, barn, substation, and road
+lighting lose grid power. Windmills decelerate and restart smoothly. Village
+simulation tuning (population limits, work speed, traffic spacing, power fade,
+and pond sizes) is centralized in `include/VillageSimulationSettings.h`.
 
 The village environment also includes enlarged traditional windmills, varied
 farm grass, larger animated ponds, pond and roadside seating, three individual
@@ -215,6 +247,12 @@ cmake -S . -B build-cmake -G "MinGW Makefiles" `
 cmake --build build-cmake -j 4
 $env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
 .\build-cmake\Animated3DFarmScene.exe
+```
+
+The CMake build also includes deterministic camera-control checks:
+
+```powershell
+ctest --test-dir build-cmake --output-on-failure
 ```
 
 For an uncapped, automatically terminating performance run, set

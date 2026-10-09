@@ -1704,7 +1704,7 @@ void FarmWorld::travelTo(int farmIndex, const Camera& camera)
 
 void FarmWorld::update(float deltaTime, Camera& camera)
 {
-    // Which farm do M / B step from?
+    // Which farm do M / comma step from? B is reserved for bonfires.
     const int base = traveling_
         ? target_
         : nearestFarm(camera.posX(), camera.posZ());
@@ -1714,7 +1714,7 @@ void FarmWorld::update(float deltaTime, Camera& camera)
     if (Input::wasPressed(GLFW_KEY_M))
         requested = (base + 1) % FarmCount;             // next farm
 
-    if (Input::wasPressed(GLFW_KEY_B))
+    if (Input::wasPressed(GLFW_KEY_COMMA))
         requested = (base + FarmCount - 1) % FarmCount; // previous farm
 
     for (int i = 0; i < 9 && i < FarmCount; ++i)

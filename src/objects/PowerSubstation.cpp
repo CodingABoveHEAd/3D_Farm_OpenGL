@@ -23,6 +23,8 @@ struct Vec3
     float x, y, z;
 };
 
+bool gGridPowered = true;
+
 // Tiny deterministic random generator so the gravel/scatter never changes.
 struct Rng
 {
@@ -65,6 +67,7 @@ constexpr Color kRed        {0.76f, 0.10f, 0.08f};
 constexpr Color kWhite      {0.92f, 0.92f, 0.90f};
 constexpr Color kEarth      {0.35f, 0.62f, 0.20f};   // green/yellow earth strap
 constexpr Color kLampGlow   {1.00f, 0.93f, 0.62f};
+constexpr Color kLampOff    {0.16f, 0.15f, 0.11f};
 constexpr Color kBund       {0.31f, 0.31f, 0.30f};
 constexpr Color kGenerator  {0.88f, 0.60f, 0.08f};
 constexpr Color kDrumRed    {0.70f, 0.10f, 0.07f};
@@ -73,6 +76,11 @@ constexpr Color kGreyPaint  {0.62f, 0.64f, 0.62f};
 constexpr Color kArrester   {0.70f, 0.71f, 0.69f};
 constexpr Color kSilica     {0.20f, 0.35f, 0.75f};
 }  // namespace palette
+
+Color lampColor()
+{
+    return gGridPowered ? palette::kLampGlow : palette::kLampOff;
+}
 
 // ---------------------------------------------------------------------------
 // Dimensions (substation-local units, before the caller's scale)
@@ -523,7 +531,7 @@ void drawBuildingFrontDetails(float wallTopY)
         beam(palette::kDarkSteel, {dim::kDoorX + side * 0.95f, 3.38f, dim::kFrontZ - 0.80f},
              {dim::kDoorX + side * 0.95f, 2.95f, dim::kFrontZ - 0.05f}, 0.07f, 0.07f);
     }
-    box(palette::kLampGlow, {dim::kDoorX, 3.37f, dim::kFrontZ - 0.55f}, {0.40f, 0.03f, 0.30f});
+    box(lampColor(), {dim::kDoorX, 3.37f, dim::kFrontZ - 0.55f}, {0.40f, 0.03f, 0.30f});
 
     // Door furniture: vision panel, louvre, kick plate, hinges, closer, lever.
     box(palette::kGlass, {dim::kDoorX - 0.30f, 2.20f, doorZ - 0.07f}, {0.34f, 0.55f, 0.03f});
@@ -554,7 +562,7 @@ void drawBuildingFrontDetails(float wallTopY)
     for (float lx : {-3.9f, 3.9f})
     {
         box(palette::kDarkSteel, {lx, 3.4f, dim::kFrontZ - 0.12f}, {0.34f, 0.20f, 0.20f});
-        box(palette::kLampGlow, {lx, 3.38f, dim::kFrontZ - 0.23f}, {0.28f, 0.14f, 0.02f});
+        box(lampColor(), {lx, 3.38f, dim::kFrontZ - 0.23f}, {0.28f, 0.14f, 0.02f});
         box(palette::kDarkSteel, {lx, 3.52f, dim::kFrontZ - 0.15f}, {0.36f, 0.03f, 0.26f});
     }
 
@@ -1159,7 +1167,7 @@ void drawFloodlightMast(float x, float z)
         glTranslatef(static_cast<float>(i) * 0.42f, 0.05f, 0.06f);
         glRotatef(28.0f, 1.0f, 0.0f, 0.0f);
         box(palette::kDarkSteel, {0.0f, 0.0f, 0.0f}, {0.34f, 0.20f, 0.28f});
-        box(palette::kLampGlow, {0.0f, -0.02f, 0.15f}, {0.30f, 0.16f, 0.02f});
+        box(lampColor(), {0.0f, -0.02f, 0.15f}, {0.30f, 0.16f, 0.02f});
         box(palette::kDarkSteel, {0.0f, 0.11f, 0.02f}, {0.38f, 0.03f, 0.34f});
         glPopMatrix();
     }
@@ -1390,8 +1398,9 @@ void drawPoleLamp(float side)
     // Glowing lens (unlit) with a brighter bulb in the middle
     glPushAttrib(GL_ENABLE_BIT);
     glDisable(GL_LIGHTING);
-    box(palette::kLampGlow, {headX, headY - 0.062f, 0.0f}, {0.40f, 0.025f, 0.18f});
-    box({1.0f, 1.0f, 0.90f}, {headX, headY - 0.070f, 0.0f}, {0.22f, 0.012f, 0.10f});
+    box(lampColor(), {headX, headY - 0.062f, 0.0f}, {0.40f, 0.025f, 0.18f});
+    box(gGridPowered ? Color{1.0f, 1.0f, 0.90f} : palette::kLampOff,
+        {headX, headY - 0.070f, 0.0f}, {0.22f, 0.012f, 0.10f});
     glPopAttrib();
 }
 
@@ -1597,7 +1606,7 @@ void drawRoofFan(float x, float y, float z, float time, float direction)
 void drawBeacon(const Vec3& p, float time)
 {
     const float phase = std::fmod(time, 1.5f);
-    const float k = phase < 0.22f ? 1.0f : 0.22f;
+    const float k = gGridPowered ? (phase < 0.22f ? 1.0f : 0.22f) : 0.05f;
 
     glColor3f(1.0f * k, 0.08f * k, 0.05f * k);
     glPushMatrix();
@@ -1663,6 +1672,27 @@ void drawSubstationDynamic(float time)
 // ---------------------------------------------------------------------------
 namespace PowerSubstation
 {
+void setPowerAmount(float amount)
+{
+    const bool powered = amount >= 0.5f;
+    if (powered == gGridPowered)
+        return;
+
+    gGridPowered = powered;
+    // Lamp colors are part of otherwise-static display lists. Rebuild each
+    // list only at the on/off threshold, never on every transition frame.
+    if (gStaticList != 0)
+    {
+        glDeleteLists(gStaticList, 1);
+        gStaticList = 0;
+    }
+    if (gRoadList != 0)
+    {
+        glDeleteLists(gRoadList, 1);
+        gRoadList = 0;
+    }
+}
+
 void draw(float x, float z, float scale, float time)
 {
     gLit = glIsEnabled(GL_LIGHTING) == GL_TRUE;

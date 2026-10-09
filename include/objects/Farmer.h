@@ -17,6 +17,9 @@ public:
     void render() const;
     void setVisible(bool visible);
     void setRoadPosition(float z);
+    float roadX() const { return x_; }
+    float roadZ() const { return z_; }
+    bool isVisible() const { return visible_; }
 
 private:
     void chooseNextWanderTarget();

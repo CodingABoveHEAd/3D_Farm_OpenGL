@@ -1,7 +1,16 @@
 #include "Animation.h"
 
+#include "VillageSimulationSettings.h"
+
+#include <cmath>
+
 void Animation::update(float dt)
 {
+    const float targetSpeed = powerOn_ ? requestedWindmillSpeed_ : 0.0f;
+    const float speedBlend = 1.0f - std::exp(
+        -VillageSimulationSettings::WindmillPowerResponse * dt);
+    windmillSpeed_ += (targetSpeed - windmillSpeed_) * speedBlend;
+
     if (paused_) return;
 
     windmillAngle_ += windmillSpeed_ * dt;
@@ -23,7 +32,7 @@ void Animation::update(float dt)
 
 void Animation::changeWindmillSpeed(float delta)
 {
-    windmillSpeed_ += delta;
-    if (windmillSpeed_ >  360.0f) windmillSpeed_ =  360.0f;
-    if (windmillSpeed_ < -360.0f) windmillSpeed_ = -360.0f;
+    requestedWindmillSpeed_ += delta;
+    if (requestedWindmillSpeed_ >  360.0f) requestedWindmillSpeed_ =  360.0f;
+    if (requestedWindmillSpeed_ < -360.0f) requestedWindmillSpeed_ = -360.0f;
 }

@@ -23,9 +23,6 @@ private:
     float position_[3]{0.0f, 4.0f, 10.0f};
     float yaw_ = -90.0f;
     float pitch_ = -15.0f;
-    float targetYaw_ = -90.0f;
-    float targetPitch_ = -15.0f;
-    float velocity_[3]{0.0f, 0.0f, 0.0f};
     float fieldOfView_ = 45.0f;
     bool initialized_ = false;
     bool cursorCaptured_ = false;

@@ -1,6 +1,7 @@
 #include "objects/Village.h"
 
 #include "DayNightSettings.h"
+#include "VillageSimulationSettings.h"
 #include "graphics/Primitives.h"
 
 #include <GLFW/glfw3.h>
@@ -529,75 +530,252 @@ void drawBicycle()
 }
 
 // ------------------------------------------------------------- villagers
-void limb(const Color& color, float x, float y, float z,
-          float length, float angleX, float angleZ, float radius)
+// ===================================================================
+// Villager (replaces the old limb() + drawVillager())
+// ===================================================================
+struct V3 { float x, y, z; };
+
+float smooth01(float t)
 {
-    glColor3f(color.r, color.g, color.b);
+    t = std::max(0.0f, std::min(1.0f, t));
+    return t * t * (3.0f - 2.0f * t);
+}
+
+// Cone frustum, base at origin, extends up by h.
+void frustum(const Color& c, float r0, float r1, float h, int slices)
+{
+    glColor3f(c.r, c.g, c.b);
+    glBegin(GL_QUAD_STRIP);
+    for (int i = 0; i <= slices; ++i)
+    {
+        const float a = 2.0f * Pi * i / slices;
+        const float cs = std::cos(a), sn = std::sin(a);
+        glNormal3f(cs, (r0 - r1) / h, sn);
+        glVertex3f(cs * r0, 0.0f, sn * r0);
+        glVertex3f(cs * r1, h, sn * r1);
+    }
+    glEnd();
+}
+
+// Tapered limb segment between two points.
+void taper(const Color& c, const V3& a, const V3& b, float r0, float r1, int slices = 9)
+{
+    const float dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+    const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-4f) return;
     glPushMatrix();
-    glTranslatef(x, y, z);
-    glRotatef(angleZ, 0.0f, 0.0f, 1.0f);
-    glRotatef(angleX, 1.0f, 0.0f, 0.0f);
-    Primitives::drawCylinder(radius, length, 9);
+    glTranslatef(a.x, a.y, a.z);
+    if (std::sqrt(dz * dz + dx * dx) > 1e-4f)
+        glRotatef(std::acos(std::max(-1.0f, std::min(1.0f, dy / len))) * 180.0f / Pi, dz, 0.0f, -dx);
+    else if (dy < 0.0f)
+        glRotatef(180.0f, 1.0f, 0.0f, 0.0f);
+    frustum(c, r0, r1, len, slices);
     glPopMatrix();
 }
 
-void drawVillager(bool seated, float phase, float time, bool holdingCup)
+struct Ring { float y, rx, rz; };
+
+// Elliptical loft through a list of rings (torso / pelvis shaping).
+void loft(const Color& c, float baseY, const Ring* rings, int n, int slices = 14)
+{
+    glColor3f(c.r, c.g, c.b);
+    glPushMatrix();
+    glTranslatef(0.0f, baseY, 0.0f);
+    for (int k = 0; k < n - 1; ++k)
+    {
+        glBegin(GL_QUAD_STRIP);
+        for (int i = 0; i <= slices; ++i)
+        {
+            const float a = 2.0f * Pi * i / slices;
+            const float cs = std::cos(a), sn = std::sin(a);
+            float nx = cs / rings[k].rx, nz = sn / rings[k].rz;
+            const float nl = std::sqrt(nx * nx + nz * nz);
+            glNormal3f(nx / nl, 0.1f, nz / nl);
+            glVertex3f(cs * rings[k].rx, rings[k].y, sn * rings[k].rz);
+            glVertex3f(cs * rings[k + 1].rx, rings[k + 1].y, sn * rings[k + 1].rz);
+        }
+        glEnd();
+    }
+    glPopMatrix();
+}
+
+// Two-bone arm. The hand is clamped to reach; returns the final hand position.
+V3 drawArm(const V3& s, V3 target, float side, const Color& sleeve,
+           const Color& skin, bool rolled)
+{
+    const float l1 = 0.56f, l2 = 0.52f;
+    V3 d{target.x - s.x, target.y - s.y, target.z - s.z};
+    float dist = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+    dist = std::max(dist, 0.05f);
+    const float reach = std::min(dist, l1 + l2 - 0.01f);
+    const V3 u{d.x / dist, d.y / dist, d.z / dist};
+    const V3 hand{s.x + u.x * reach, s.y + u.y * reach, s.z + u.z * reach};
+
+    // Elbow: circle-intersection, bent outward / down / back.
+    const float a = (l1 * l1 - l2 * l2 + reach * reach) / (2.0f * reach);
+    const float h = std::sqrt(std::max(0.0f, l1 * l1 - a * a));
+    V3 pole{side * 0.7f, -0.7f, -0.5f};
+    const float pd = pole.x * u.x + pole.y * u.y + pole.z * u.z;
+    pole = {pole.x - u.x * pd, pole.y - u.y * pd, pole.z - u.z * pd};
+    const float pl = std::sqrt(pole.x * pole.x + pole.y * pole.y + pole.z * pole.z);
+    if (pl > 1e-4f) { pole.x /= pl; pole.y /= pl; pole.z /= pl; }
+    const V3 elbow{s.x + u.x * a + pole.x * h, s.y + u.y * a + pole.y * h, s.z + u.z * a + pole.z * h};
+
+    sphere(sleeve, s.x, s.y, s.z, 0.115f, 0.115f, 0.115f, 9, 7);            // shoulder
+    taper(sleeve, s, elbow, 0.088f, 0.070f);
+    sphere(rolled ? skin : sleeve, elbow.x, elbow.y, elbow.z, 0.068f, 0.068f, 0.068f, 8, 6);
+    taper(rolled ? skin : sleeve, elbow, hand, 0.064f, 0.046f);
+    sphere(skin, hand.x, hand.y, hand.z, 0.055f, 0.068f, 0.050f, 8, 6);      // hand
+    return hand;
+}
+
+void drawVillager(bool seated, float phase, float time, bool holdingCup,
+                  bool driving = false)
 {
     const Color shirts[] = {
         {0.68f, 0.18f, 0.14f}, {0.16f, 0.42f, 0.26f},
         {0.20f, 0.38f, 0.68f}, {0.78f, 0.56f, 0.15f}};
     const Color shirt = shirts[static_cast<int>(phase * 3.0f) & 3];
-    const float gesture = std::sin(time * (0.75f + phase * 0.08f) + phase) * 10.0f;
-    const float sip = holdingCup
-        ? 0.5f + 0.5f * std::sin(time * 0.48f + phase * 2.3f) : 0.0f;
-    const float headTurn = std::sin(time * 0.31f + phase) * 14.0f;
 
-    if (seated)
-    {
-        for (float side : {-1.0f, 1.0f})
-        {
-            limb({0.16f, 0.22f, 0.34f}, side * 0.18f, 1.05f, 0.0f,
-                 0.58f, -67.0f, 0.0f, 0.105f);
-            limb({0.18f, 0.14f, 0.09f}, side * 0.18f, 0.82f, 0.52f,
-                 0.72f, 8.0f, 0.0f, 0.09f);
-            box({0.12f, 0.07f, 0.035f}, side * 0.18f, 0.08f, 0.63f,
-                0.24f, 0.13f, 0.40f);
-        }
-    }
-    else
-    {
-        for (float side : {-1.0f, 1.0f})
-        {
-            limb({0.16f, 0.22f, 0.34f}, side * 0.17f, 1.10f, 0.0f,
-                 0.93f, 0.0f, 0.0f, 0.105f);
-            box({0.12f, 0.07f, 0.035f}, side * 0.17f, 0.07f, 0.10f,
-                0.24f, 0.13f, 0.38f);
-        }
-    }
+    // Per-person variety, derived from the phase so every villager differs.
+    const int id = static_cast<int>(phase * 10.0f);
+    const Color skin = vary(Skin, id * 17 + 3, 0.09f);
+    const Color trouserSet[] = {{0.16f, 0.22f, 0.34f}, {0.24f, 0.21f, 0.17f}, {0.62f, 0.58f, 0.48f}};
+    const Color pants = trouserSet[id % 3];
+    const bool elder = hash01(id * 5 + 1) > 0.72f;
+    const Color hair = elder ? Color{0.62f, 0.61f, 0.58f} : Color{0.07f, 0.05f, 0.04f};
+    const bool beard  = hash01(id * 7 + 2) > 0.55f;
+    const bool cap    = hash01(id * 3 + 4) > 0.68f;
+    const bool scarf  = hash01(id * 11 + 6) > 0.60f;
+    const bool rolled = hash01(id * 13 + 8) > 0.50f;
+    const Color shoe{0.12f, 0.07f, 0.035f};
 
+    // Animation (same rates as before).
+    const float g = std::sin(time * (0.75f + phase * 0.08f) + phase);
+    const float sipWave = std::sin(time * 0.48f + phase * 2.3f);
+    const float sip = holdingCup ? smooth01((sipWave - 0.30f) / 0.55f) : 0.0f;
+    const float headTurn = std::sin(time * 0.31f + phase)
+        * (driving ? 3.0f : 14.0f);
     const float hipY = seated ? 1.12f : 1.45f;
-    sphere(shirt, 0.0f, hipY + 0.53f, 0.0f, 0.38f, 0.58f, 0.25f);
-    box({0.16f, 0.22f, 0.34f}, 0.0f, hipY + 0.10f, 0.0f, 0.68f, 0.26f, 0.46f);
 
+    // ---- Legs and shoes ----------------------------------------------------
     for (float side : {-1.0f, 1.0f})
     {
-        const bool cupArm = holdingCup && side > 0.0f;
-        const float armAngle = cupArm ? -58.0f * sip : gesture * side;
-        limb(shirt, side * 0.45f, hipY + 0.82f, 0.0f,
-             0.62f, armAngle, side * 8.0f, 0.09f);
-        sphere(Skin, side * 0.45f, hipY + 0.25f + (cupArm ? 0.45f * sip : 0.0f),
-               cupArm ? 0.30f * sip : 0.05f,
-               0.11f, 0.11f, 0.11f, 8, 6);
-        if (cupArm) drawCup(side * 0.45f, hipY + 0.30f + 0.43f * sip, 0.28f * sip);
+        V3 hip, knee, ankle;
+        if (seated)
+        {   // thigh slopes down from the seat so the feet reach the ground
+            hip   = {side * 0.18f, 1.07f, 0.00f};
+            knee  = {side * 0.19f, 0.84f, 0.52f};
+            ankle = {side * 0.19f, 0.13f, 0.58f};
+        }
+        else
+        {
+            hip   = {side * 0.16f, hipY - 0.05f, 0.00f};
+            knee  = {side * 0.17f, 0.78f, 0.03f};
+            ankle = {side * 0.17f, 0.14f, 0.00f};
+        }
+        taper(pants, hip, knee, 0.125f, 0.095f);
+        sphere(pants, knee.x, knee.y, knee.z, 0.097f, 0.097f, 0.097f, 8, 6);
+        taper(pants, knee, ankle, 0.092f, 0.062f);
+
+        glPushMatrix();
+        glTranslatef(ankle.x, 0.0f, ankle.z);
+        glRotatef(side * 6.0f, 0.0f, 1.0f, 0.0f);
+        sphere(shoe, 0.0f, 0.065f, 0.07f, 0.095f, 0.065f, 0.14f, 9, 6);
+        sphere(shoe, 0.0f, 0.050f, 0.15f, 0.085f, 0.045f, 0.07f, 8, 5);
+        glPopMatrix();
     }
 
+    // ---- Pelvis (trousers) and torso (shirt) ------------------------------
+    const Ring pelvis[] = {{-0.16f, 0.30f, 0.20f}, {-0.02f, 0.345f, 0.225f}, {0.12f, 0.325f, 0.215f}};
+    loft(pants, hipY, pelvis, 3);
+    const Ring torso[] = {{0.00f, 0.350f, 0.235f}, {0.22f, 0.300f, 0.205f}, {0.55f, 0.335f, 0.225f},
+                          {0.80f, 0.385f, 0.225f}, {0.94f, 0.340f, 0.190f}, {1.00f, 0.150f, 0.120f}};
+    loft(shirt, hipY, torso, 6);
+    if (scarf)
+    {
+        const Ring wrap[] = {{0.92f, 0.370f, 0.235f}, {1.04f, 0.200f, 0.150f}};
+        loft({0.75f, 0.15f, 0.12f}, hipY, wrap, 2);
+    }
+
+    // Neck.
+    taper(skin, {0.0f, hipY + 0.98f, 0.0f}, {0.0f, hipY + 1.10f, 0.01f}, 0.085f, 0.075f);
+
+    // ---- Arms ---------------------------------------------------------------
+    for (float side : {-1.0f, 1.0f})
+    {
+        const V3 shoulder{side * 0.41f, hipY + 0.86f, 0.0f};
+        const V3 rest = seated ? V3{side * 0.27f, 1.13f, 0.32f}
+                               : V3{side * 0.47f, hipY - 0.12f, 0.04f};
+        const bool cupArm = holdingCup && side > 0.0f;
+
+        V3 target;
+        if (driving)
+        {
+            // Both hands reach the tractor wheel.  The target is deliberately
+            // forward of the ordinary seated pose and is clamped by the
+            // two-bone arm solver, keeping elbows inside the cabin.
+            target = {side * 0.30f, hipY + 0.66f, 1.18f};
+        }
+        else if (cupArm)
+        {   // hold the cup at chest height, lift it to the lips when sipping
+            const V3 hold{0.30f, hipY + 0.50f, 0.34f};
+            const V3 mouth{0.06f, hipY + 1.04f, 0.30f};
+            target = {hold.x + (mouth.x - hold.x) * sip,
+                      hold.y + (mouth.y - hold.y) * sip,
+                      hold.z + (mouth.z - hold.z) * sip};
+        }
+        else
+        {   // conversational gesture: hand lifts forward now and then
+            const float gp = smooth01(((side > 0.0f ? g : -g) - 0.10f) / 0.80f);
+            target = {rest.x - side * 0.05f * gp,
+                      rest.y + (seated ? 0.35f : 0.45f) * gp,
+                      rest.z + (seated ? 0.15f : 0.30f) * gp};
+        }
+        const V3 hand = drawArm(shoulder, target, side, shirt, skin, rolled);
+        if (cupArm)
+        {
+            glPushMatrix();
+            glTranslatef(hand.x, hand.y - 0.05f, hand.z);
+            glRotatef(-38.0f * sip, 1.0f, 0.0f, 0.0f);
+            drawCup(0.0f, 0.0f, 0.0f);
+            glPopMatrix();
+        }
+    }
+
+    // ---- Head ----------------------------------------------------------------
     glPushMatrix();
-    glTranslatef(0.0f, hipY + 1.25f, 0.0f);
+    glTranslatef(0.0f, hipY + 1.08f, 0.0f);
     glRotatef(headTurn, 0.0f, 1.0f, 0.0f);
-    sphere(Skin, 0.0f, 0.0f, 0.0f, 0.25f, 0.30f, 0.25f);
-    sphere({0.16f, 0.09f, 0.04f}, 0.0f, 0.19f, -0.04f, 0.26f, 0.14f, 0.24f);
-    sphere({0.03f, 0.03f, 0.025f}, -0.08f, 0.04f, 0.235f, 0.025f, 0.025f, 0.018f, 6, 4);
-    sphere({0.03f, 0.03f, 0.025f},  0.08f, 0.04f, 0.235f, 0.025f, 0.025f, 0.018f, 6, 4);
+    glRotatef(-10.0f * sip, 1.0f, 0.0f, 0.0f);   // tilt back while drinking
+    glTranslatef(0.0f, 0.22f, 0.0f);
+
+    sphere(skin, 0.0f, 0.0f, 0.0f, 0.200f, 0.260f, 0.220f, 14, 10);        // skull
+    sphere(skin, 0.0f, -0.14f, 0.045f, 0.145f, 0.115f, 0.155f, 10, 7);     // jaw / chin
+    for (float side : {-1.0f, 1.0f})
+    {
+        sphere(skin, side * 0.198f, -0.01f, -0.01f, 0.040f, 0.060f, 0.030f, 8, 5);   // ears
+        sphere({0.93f, 0.92f, 0.88f}, side * 0.08f, 0.04f, 0.192f, 0.030f, 0.020f, 0.020f, 8, 5);
+        sphere({0.05f, 0.03f, 0.02f}, side * 0.08f, 0.04f, 0.206f, 0.014f, 0.014f, 0.010f, 6, 4);
+        sphere(hair, side * 0.08f, 0.092f, 0.185f, 0.045f, 0.010f, 0.020f, 6, 4);    // brows
+    }
+    sphere(tint(skin, 0.96f), 0.0f, -0.04f, 0.215f, 0.030f, 0.045f, 0.035f, 8, 6);   // nose
+
+    if (cap)
+    {
+        sphere(hair, 0.0f, -0.02f, -0.07f, 0.215f, 0.200f, 0.210f, 12, 8);
+        sphere({0.92f, 0.90f, 0.84f}, 0.0f, 0.12f, -0.01f, 0.215f, 0.140f, 0.225f, 12, 7);
+    }
+    else
+        sphere(hair, 0.0f, 0.07f, -0.05f, 0.225f, 0.235f, 0.235f, 12, 9);
+
+    if (beard)
+    {
+        sphere(hair, 0.0f, -0.13f, 0.075f, 0.165f, 0.125f, 0.150f, 10, 7);
+        sphere(hair, 0.0f, -0.075f, 0.205f, 0.060f, 0.015f, 0.020f, 6, 4);          // moustache
+    }
+    else
+        sphere({0.45f, 0.22f, 0.18f}, 0.0f, -0.11f, 0.200f, 0.045f, 0.010f, 0.015f, 6, 4);
     glPopMatrix();
 }
 
@@ -1138,7 +1316,382 @@ void drawGrassTuft(float x, float z, float height, float rotation, int shade)
     glEnd();
     glPopMatrix();
 }
+
+void drawBlossom(const Color& color, float x, float y, float z, float size)
+{
+    glColor3f(color.r, color.g, color.b);
+    glBegin(GL_TRIANGLES);
+    for (int petal = 0; petal < 5; ++petal)
+    {
+        const float a = 2.0f * Pi * static_cast<float>(petal) / 5.0f;
+        const float b = a + 0.55f;
+        glNormal3f(0.0f, 1.0f, 0.0f);
+        glVertex3f(x, y, z);
+        glVertex3f(x + std::cos(a) * size, y + size * 0.10f,
+                   z + std::sin(a) * size);
+        glVertex3f(x + std::cos(b) * size, y + size * 0.10f,
+                   z + std::sin(b) * size);
+    }
+    glEnd();
+}
+
+void drawFlower(float x, float z, float height, int seed)
+{
+    static const Color petals[] = {
+        {0.92f, 0.28f, 0.35f}, {0.78f, 0.48f, 0.88f},
+        {0.96f, 0.76f, 0.20f}, {0.92f, 0.92f, 0.88f}};
+    const Color petal = petals[seed & 3];
+    column({0.12f, 0.40f, 0.10f}, x, 0.04f, z, 0.025f, height, 6);
+    drawBlossom(petal, x, height + 0.05f, z, 0.17f);
+    sphere({0.55f, 0.30f, 0.06f}, x, height + 0.055f, z,
+           0.055f, 0.040f, 0.055f, 5, 3);
+}
+
+void drawFloweringShrub(float x, float z, float scale, int seed)
+{
+    const Color leaf{0.10f, 0.32f, 0.09f};
+    sphere(leaf, x, 0.48f * scale, z, 0.75f * scale, 0.55f * scale,
+           0.65f * scale, 8, 5);
+    sphere(tint(leaf, 1.20f), x - 0.45f * scale, 0.42f * scale,
+           z + 0.18f * scale, 0.48f * scale, 0.42f * scale,
+           0.45f * scale, 7, 5);
+    sphere(tint(leaf, 0.86f), x + 0.42f * scale, 0.45f * scale,
+           z - 0.12f * scale, 0.50f * scale, 0.44f * scale,
+           0.48f * scale, 7, 5);
+    for (int flower = 0; flower < 7; ++flower)
+    {
+        const float angle = 2.0f * Pi * static_cast<float>(flower) / 7.0f;
+        const Color c = flower % 2
+            ? Color{0.96f, 0.55f, 0.66f} : Color{0.82f, 0.72f, 0.95f};
+        drawBlossom(c, x + std::cos(angle) * 0.48f * scale,
+                    (0.72f + 0.08f * hash01(seed + flower)) * scale,
+                    z + std::sin(angle) * 0.42f * scale, 0.15f * scale);
+    }
+}
+
+void drawFloweringTree(float x, float z, float scale, int seed)
+{
+    box(WoodDark, x, 1.7f * scale, z,
+        0.48f * scale, 3.4f * scale, 0.48f * scale);
+    const Color leaf{0.12f, 0.37f, 0.11f};
+    sphere(leaf, x, 4.0f * scale, z, 1.45f * scale, 1.15f * scale,
+           1.35f * scale, 8, 6);
+    sphere(tint(leaf, 1.16f), x - 1.0f * scale, 3.75f * scale,
+           z + 0.1f * scale, 1.05f * scale, 0.90f * scale,
+           1.0f * scale, 8, 6);
+    sphere(tint(leaf, 0.88f), x + 1.0f * scale, 3.8f * scale,
+           z - 0.15f * scale, 1.05f * scale, 0.92f * scale,
+           1.0f * scale, 8, 6);
+    for (int blossom = 0; blossom < 16; ++blossom)
+    {
+        const float angle = static_cast<float>(blossom) * 2.39996f;
+        const float radius = (0.45f + 0.65f * hash01(seed + blossom * 13)) * scale;
+        const Color c = blossom % 3
+            ? Color{0.95f, 0.62f, 0.72f} : Color{0.96f, 0.88f, 0.91f};
+        drawBlossom(c, x + std::cos(angle) * radius,
+                    (3.65f + hash01(seed + blossom * 31) * 0.9f) * scale,
+                    z + std::sin(angle) * radius, 0.19f * scale);
+    }
+}
 } // namespace
+
+void drawDriver(float animationTime, float phase, bool detailed)
+{
+    // Drivers keep a steady wheel-holding pose. Cache the complete shared
+    // villager model per clothing variant so adding occupants to traffic does
+    // not multiply the immediate-mode character cost every frame.
+    static GLuint driverLists[4] = {0, 0, 0, 0};
+    static GLuint driverLodLists[4] = {0, 0, 0, 0};
+    const int variant = static_cast<int>(std::fabs(phase)) & 3;
+    GLuint& list = detailed ? driverLists[variant] : driverLodLists[variant];
+    if (list == 0)
+    {
+        list = glGenLists(1);
+        glNewList(list, GL_COMPILE);
+        if (detailed)
+        {
+            drawVillager(true, phase, 0.0f, false, true);
+        }
+        else
+        {
+            // Far driver LOD retains the shared palette, proportions, seated
+            // joints, and wheel-reaching arm solver with far fewer vertices.
+            const Color shirts[] = {
+                {0.68f, 0.18f, 0.14f}, {0.16f, 0.42f, 0.26f},
+                {0.20f, 0.38f, 0.68f}, {0.78f, 0.56f, 0.15f}};
+            const Color shirt = shirts[variant];
+            const Color pants{0.16f, 0.22f, 0.34f};
+            const Color skin = vary(Skin, variant * 17 + 3, 0.08f);
+            for (float side : {-1.0f, 1.0f})
+            {
+                const V3 hip{side * 0.18f, 1.07f, 0.0f};
+                const V3 knee{side * 0.19f, 0.84f, 0.52f};
+                const V3 ankle{side * 0.19f, 0.13f, 0.58f};
+                taper(pants, hip, knee, 0.12f, 0.09f, 6);
+                taper(pants, knee, ankle, 0.09f, 0.06f, 6);
+                const V3 shoulder{side * 0.39f, 1.98f, 0.0f};
+                drawArm(shoulder, {side * 0.30f, 1.78f, 1.18f},
+                        side, shirt, skin, false);
+            }
+            box(pants, 0.0f, 1.12f, 0.0f, 0.62f, 0.28f, 0.40f);
+            box(shirt, 0.0f, 1.67f, 0.0f, 0.72f, 0.82f, 0.42f);
+            sphere(skin, 0.0f, 2.43f, 0.02f,
+                   0.21f, 0.27f, 0.22f, 8, 5);
+            sphere({0.08f, 0.05f, 0.03f}, 0.0f, 2.50f, -0.04f,
+                   0.22f, 0.18f, 0.22f, 7, 4);
+        }
+        glEndList();
+    }
+    glCallList(list);
+    (void)animationTime;
+}
+
+void drawWorldVegetation(VisibilityTest visibility, float viewerX, float viewerZ)
+{
+    constexpr int chunkColumns = 8;
+    constexpr int chunkRows = 8;
+    constexpr float worldMin = -160.0f;
+    constexpr float chunkSize = 40.0f;
+    constexpr float drawDistance = 90.0f;
+    static GLuint chunkLists[chunkRows][chunkColumns] = {};
+
+    const auto suitable = [](float x, float z)
+    {
+        if (std::fabs(x) < 12.0f) return false;
+        constexpr float farmRows[] =
+            {-68.0f, -34.0f, 0.0f, 34.0f, 68.0f, 102.0f};
+        for (float row : farmRows)
+            if (std::fabs(std::fabs(x) - 38.0f) < 24.5f
+                && std::fabs(z - row) < 19.5f)
+                return false;
+
+        struct Exclusion { float x, z, rx, rz; };
+        constexpr Exclusion exclusions[] = {
+            {-82.0f, -42.0f, 24.0f, 19.0f}, {73.0f, 24.0f, 22.0f, 17.5f},
+            {-71.0f, 58.0f, 22.0f, 17.5f}, {-65.0f, -68.0f, 15.0f, 15.0f},
+            {65.0f, -34.0f, 15.0f, 15.0f}, {-65.0f, 34.0f, 15.0f, 15.0f},
+            {65.0f, 68.0f, 15.0f, 15.0f}, {-14.5f, -32.0f, 8.0f, 7.0f},
+            {14.5f, 18.0f, 8.0f, 7.0f}, {-14.5f, 66.0f, 8.0f, 7.0f}};
+        for (const Exclusion& e : exclusions)
+        {
+            const float dx = (x - e.x) / e.rx;
+            const float dz = (z - e.z) / e.rz;
+            if (dx * dx + dz * dz < 1.0f) return false;
+        }
+        for (int site = 0; site < VillageSimulationSettings::BonfireSiteCount; ++site)
+        {
+            const float dx = x - VillageSimulationSettings::BonfireSiteX[site];
+            const float dz = z - VillageSimulationSettings::BonfireSiteZ[site];
+            if (dx * dx + dz * dz < 9.0f * 9.0f) return false;
+        }
+        return true;
+    };
+
+    for (int row = 0; row < chunkRows; ++row)
+    {
+        for (int columnIndex = 0; columnIndex < chunkColumns; ++columnIndex)
+        {
+            const float baseX = worldMin + static_cast<float>(columnIndex) * chunkSize;
+            const float baseZ = worldMin + static_cast<float>(row) * chunkSize;
+            const float centerX = baseX + chunkSize * 0.5f;
+            const float centerZ = baseZ + chunkSize * 0.5f;
+            const float dx = centerX - viewerX;
+            const float dz = centerZ - viewerZ;
+            if (dx * dx + dz * dz > drawDistance * drawDistance
+                || (visibility && !visibility(centerX, 1.0f, centerZ, 30.0f)))
+                continue;
+
+            GLuint& list = chunkLists[row][columnIndex];
+            if (list == 0)
+            {
+                list = glGenLists(1);
+                glNewList(list, GL_COMPILE);
+                for (int localX = 0; localX < 8; ++localX)
+                {
+                    for (int localZ = 0; localZ < 7; ++localZ)
+                    {
+                        const int seed = (columnIndex * 8 + localX + 9) * 131
+                            + (row * 7 + localZ + 7) * 47;
+                        if (hash01(seed) < 0.62f) continue;
+                        const float x = baseX + (localX + 0.5f) * 5.0f
+                            + (hash01(seed + 17) - 0.5f) * 3.3f;
+                        const float z = baseZ + (localZ + 0.5f) * (chunkSize / 7.0f)
+                            + (hash01(seed + 31) - 0.5f) * 3.5f;
+                        if (!suitable(x, z)) continue;
+                        drawGrassTuft(
+                            x, z, 0.22f + hash01(seed + 53) * 0.58f,
+                            hash01(seed + 71) * 180.0f, seed);
+                        if (hash01(seed + 89) > 0.94f)
+                            drawFlower(x + 0.35f, z - 0.22f,
+                                       0.32f + hash01(seed + 97) * 0.22f, seed);
+                    }
+                }
+                glEndList();
+            }
+            glCallList(list);
+        }
+    }
+
+    constexpr float shrubs[][3] = {
+        {-58.0f, -28.0f, 1.0f}, {-60.0f, -57.0f, 0.9f},
+        {-106.0f, -35.0f, 1.1f}, {53.0f, 13.0f, 1.0f},
+        {95.0f, 18.0f, 0.9f}, {-50.0f, 55.0f, 1.1f},
+        {-94.0f, 68.0f, 0.9f}, {96.0f, 48.0f, 1.0f}};
+    static GLuint shrubLists[8] = {};
+    for (int i = 0; i < 8; ++i)
+    {
+        const float dx = shrubs[i][0] - viewerX;
+        const float dz = shrubs[i][1] - viewerZ;
+        if (dx * dx + dz * dz > drawDistance * drawDistance
+            || (visibility && !visibility(shrubs[i][0], 1.0f, shrubs[i][1], 2.0f)))
+            continue;
+        if (shrubLists[i] == 0)
+        {
+            shrubLists[i] = glGenLists(1);
+            glNewList(shrubLists[i], GL_COMPILE);
+            drawFloweringShrub(shrubs[i][0], shrubs[i][1], shrubs[i][2], 200 + i);
+            glEndList();
+        }
+        glCallList(shrubLists[i]);
+    }
+
+    constexpr float floweringTrees[][3] = {
+        {-110.0f, -39.0f, 1.15f}, {101.0f, 22.0f, 1.05f},
+        {-98.0f, 72.0f, 1.10f}, {94.0f, -18.0f, 1.00f},
+        {-102.0f, -72.0f, 1.08f}};
+    static GLuint treeLists[5] = {};
+    for (int i = 0; i < 5; ++i)
+    {
+        const float dx = floweringTrees[i][0] - viewerX;
+        const float dz = floweringTrees[i][1] - viewerZ;
+        if (dx * dx + dz * dz > drawDistance * drawDistance
+            || (visibility
+                && !visibility(
+                    floweringTrees[i][0], 4.0f, floweringTrees[i][1], 6.0f)))
+            continue;
+        if (treeLists[i] == 0)
+        {
+            treeLists[i] = glGenLists(1);
+            glNewList(treeLists[i], GL_COMPILE);
+            drawFloweringTree(
+                floweringTrees[i][0], floweringTrees[i][1],
+                floweringTrees[i][2], 310 + i);
+            glEndList();
+        }
+        glCallList(treeLists[i]);
+    }
+}
+
+void drawBonfireSite(int siteIndex, float animationTime, float nightAmount)
+{
+    if (siteIndex < 0 || siteIndex >= VillageSimulationSettings::BonfireSiteCount)
+        return;
+
+    static GLuint firePitList = 0;
+    if (firePitList == 0)
+    {
+        firePitList = glGenLists(1);
+        glNewList(firePitList, GL_COMPILE);
+        glColor3f(0.30f, 0.19f, 0.10f);
+        glPushMatrix(); glTranslatef(0.0f, 0.055f, 0.0f);
+        Primitives::drawPlane(8.2f, 8.2f); glPopMatrix();
+        for (int stone = 0; stone < 14; ++stone)
+        {
+            const float a = 2.0f * Pi * static_cast<float>(stone) / 14.0f;
+            sphere(vary({0.34f, 0.32f, 0.29f}, stone, 0.18f),
+                   std::cos(a) * 1.35f, 0.23f, std::sin(a) * 1.35f,
+                   0.34f, 0.22f, 0.30f, 7, 5);
+        }
+        for (int log = 0; log < 4; ++log)
+        {
+            glPushMatrix();
+            glRotatef(45.0f + static_cast<float>(log) * 45.0f,
+                      0.0f, 1.0f, 0.0f);
+            box(log % 2 ? Wood : WoodDark, 0.0f, 0.35f, 0.0f,
+                2.15f, 0.24f, 0.28f);
+            glPopMatrix();
+        }
+        // Split-log seats used by the two seated villagers.
+        box(WoodDark, -3.0f, 0.83f, 0.0f, 1.7f, 0.48f, 0.62f);
+        box(WoodDark,  3.0f, 0.83f, 0.0f, 1.7f, 0.48f, 0.62f);
+        glEndList();
+    }
+
+    glPushMatrix();
+    glTranslatef(VillageSimulationSettings::BonfireSiteX[siteIndex], 0.0f,
+                 VillageSimulationSettings::BonfireSiteZ[siteIndex]);
+    glRotatef(static_cast<float>(siteIndex) * 31.0f, 0.0f, 1.0f, 0.0f);
+    glCallList(firePitList);
+
+    const float flickerA = 0.88f + 0.16f
+        * std::sin(animationTime * 8.1f + static_cast<float>(siteIndex));
+    const float flickerB = 0.86f + 0.14f
+        * std::sin(animationTime * 11.3f + static_cast<float>(siteIndex) * 2.2f);
+    glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_CURRENT_BIT
+                 | GL_COLOR_BUFFER_BIT | GL_POINT_BIT);
+    glEnable(GL_LIGHTING);
+    const GLfloat emission[] = {
+        0.52f + nightAmount * 0.45f, 0.18f + nightAmount * 0.20f,
+        0.025f, 1.0f};
+    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+    sphere({0.92f, 0.20f, 0.035f}, 0.0f, 0.82f, 0.0f,
+           0.72f * flickerA, 1.25f * flickerB, 0.68f * flickerA, 9, 6);
+    sphere({1.00f, 0.55f, 0.06f}, -0.18f, 0.92f, 0.05f,
+           0.40f * flickerB, 1.02f * flickerA, 0.38f * flickerB, 8, 5);
+    sphere({1.00f, 0.88f, 0.25f}, 0.12f, 0.72f, -0.08f,
+           0.25f * flickerA, 0.72f * flickerB, 0.24f * flickerA, 7, 5);
+    const GLfloat noEmission[] = {0.0f, 0.0f, 0.0f, 1.0f};
+    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEmission);
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    for (int puff = 0; puff < 2; ++puff)
+    {
+        const float life = std::fmod(
+            animationTime * 0.16f + static_cast<float>(puff) * 0.5f
+            + static_cast<float>(siteIndex) * 0.13f, 1.0f);
+        glColor4f(0.36f, 0.34f, 0.32f, 0.16f * (1.0f - life));
+        glPushMatrix();
+        glTranslatef(std::sin(animationTime + puff) * 0.22f * life,
+                     1.55f + life * 2.4f,
+                     std::cos(animationTime * 0.7f + puff) * 0.18f * life);
+        const float size = 0.25f + life * 0.42f;
+        glScalef(size, size, size);
+        Primitives::drawSphere(1.0f, 7, 5);
+        glPopMatrix();
+    }
+    glPointSize(3.0f);
+    glBegin(GL_POINTS);
+    for (int spark = 0; spark < 5; ++spark)
+    {
+        const float life = std::fmod(
+            animationTime * (0.55f + spark * 0.03f) + spark * 0.21f, 1.0f);
+        glColor4f(1.0f, 0.48f + 0.35f * life, 0.08f, 1.0f - life);
+        glVertex3f(std::sin(spark * 2.1f + animationTime) * 0.42f * life,
+                   1.0f + life * 2.0f,
+                   std::cos(spark * 1.7f + animationTime) * 0.35f * life);
+    }
+    glEnd();
+    glDepthMask(GL_TRUE);
+    glPopAttrib();
+
+    glPushMatrix(); glTranslatef(-3.0f, 0.0f, 0.0f);
+    glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
+    drawVillager(true, 7.2f + siteIndex, animationTime, false); glPopMatrix();
+    glPushMatrix(); glTranslatef(3.0f, 0.0f, 0.0f);
+    glRotatef(-90.0f, 0.0f, 1.0f, 0.0f);
+    drawVillager(true, 8.7f + siteIndex, animationTime, siteIndex % 2 == 0);
+    glPopMatrix();
+    if ((siteIndex & 1) == 0)
+    {
+        glPushMatrix(); glTranslatef(0.0f, 0.0f, -3.35f);
+        drawVillager(false, 10.1f + siteIndex, animationTime, false);
+        glPopMatrix();
+    }
+    glPopMatrix();
+}
 
 void drawFarmGrass(int seed, float cropX, float cropZ,
                    float houseX, float houseZ, bool hasWindmill)
@@ -1160,6 +1713,18 @@ void drawFarmGrass(int seed, float cropX, float cropZ,
         drawGrassTuft(x, z, 0.24f + hash01(index * 43 + seed) * 0.42f,
                       hash01(index * 71 + seed) * 180.0f, index + seed);
     }
+
+    // A restrained flower border gives each house colour without placing
+    // vegetation on the front access path or inside the building footprint.
+    for (int index = 0; index < 8; ++index)
+    {
+        const float angle = 2.0f * Pi * static_cast<float>(index) / 8.0f;
+        const float x = actualHouseX + std::cos(angle) * 6.2f;
+        const float z = actualHouseZ + std::sin(angle) * 4.8f;
+        if (std::fabs(x - 10.0f) < 2.4f && z < actualHouseZ) continue;
+        drawFlower(x, z, 0.34f + hash01(seed * 73 + index) * 0.24f,
+                   seed * 11 + index);
+    }
 }
 
 void drawPondSeating(float animationTime)
@@ -1167,7 +1732,7 @@ void drawPondSeating(float animationTime)
     // East of the western pond, outside its shoreline. The bench faces west
     // toward the water; its occupants' feet land on the access-side grass.
     glPushMatrix();
-    glTranslatef(-57.5f, 0.0f, -42.0f);
+    glTranslatef(-61.5f, 0.0f, -42.0f);
     glRotatef(-90.0f, 0.0f, 1.0f, 0.0f);
     drawBench(4.8f);
     glPushMatrix(); glTranslatef(-1.05f, 0.0f, 0.0f);
@@ -1178,11 +1743,12 @@ void drawPondSeating(float animationTime)
 
     // Compact dirt access path from the open field to the bench.
     glColor3f(0.52f, 0.38f, 0.21f);
-    glPushMatrix(); glTranslatef(-54.2f, 0.025f, -42.0f);
+    glPushMatrix(); glTranslatef(-58.2f, 0.025f, -42.0f);
     Primitives::drawPlane(6.2f, 2.2f); glPopMatrix();
 }
 
-void drawRoadsideAmenities(float animationTime, float nightAmount)
+void drawRoadsideAmenities(float animationTime, float electricLightAmount,
+                           unsigned int benchOccupancy)
 {
     struct Placement { float x, z, rotation; int variant; };
     constexpr Placement shops[] = {
@@ -1194,7 +1760,7 @@ void drawRoadsideAmenities(float animationTime, float nightAmount)
         glPushMatrix();
         glTranslatef(shop.x, 0.0f, shop.z);
         glRotatef(shop.rotation, 0.0f, 1.0f, 0.0f);
-        drawShop(shop.variant, animationTime, nightAmount);
+        drawShop(shop.variant, animationTime, electricLightAmount);
         glPopMatrix();
     }
 
@@ -1210,6 +1776,21 @@ void drawRoadsideAmenities(float animationTime, float nightAmount)
         glTranslatef(bench.x, 0.0f, bench.z);
         glRotatef(bench.rotation + (index % 2 ? 3.0f : -2.0f), 0.0f, 1.0f, 0.0f);
         drawBench(3.8f + (index % 2) * 0.3f);
+        const unsigned int occupantCount = (benchOccupancy >> (index * 2)) & 3u;
+        if (occupantCount == 1u)
+        {
+            drawVillager(true, 4.1f + static_cast<float>(index) * 1.7f,
+                         animationTime, index % 3 == 0);
+        }
+        else if (occupantCount >= 2u)
+        {
+            glPushMatrix(); glTranslatef(-0.82f, 0.0f, 0.0f);
+            drawVillager(true, 4.1f + static_cast<float>(index) * 1.7f,
+                         animationTime, false); glPopMatrix();
+            glPushMatrix(); glTranslatef(0.82f, 0.0f, 0.0f);
+            drawVillager(true, 5.3f + static_cast<float>(index) * 1.9f,
+                         animationTime, true); glPopMatrix();
+        }
         glPopMatrix();
     }
 }

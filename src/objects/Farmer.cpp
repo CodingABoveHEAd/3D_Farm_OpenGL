@@ -231,7 +231,8 @@ void Farmer::setVisible(bool visible)
 
 void Farmer::setRoadPosition(float z)
 {
-    x_ = x_ < 0.0f ? -2.0f : 2.0f;
+    // Pedestrians use the grass shoulders, leaving the vehicle lane clear.
+    x_ = x_ < 0.0f ? -8.5f : 8.5f;
     z_ = z;
     heading_ = 0.0f;
 }

@@ -2,6 +2,7 @@
 
 #include "Animation.h"
 #include "Lighting.h"
+#include "VillageSimulationSettings.h"
 #include "objects/Farmhouse.h"
 #include "objects/Animals.h"
 #include "objects/Barn.h"
@@ -15,6 +16,7 @@
 
 #include <array>
 #include <random>
+#include <vector>
 
 class Scene {
 public:
@@ -25,6 +27,13 @@ public:
     void render() const;
     bool isNight() const;
     float nightAmount() const;
+    bool isPowerOn() const { return powerOn_; }
+    bool isTrafficRunning() const { return trafficRunning_; }
+    bool areWorkersPaused() const { return workersPaused_; }
+    bool areBonfiresEnabled() const { return bonfiresEnabled_; }
+    float workerSpeed() const { return workerSpeedScale_; }
+    std::size_t cropWorkerCount() const { return cropWorkers_.size(); }
+    float minimumTrafficGap() const;
 
 private:
     struct FarmLayout
@@ -46,6 +55,7 @@ private:
     void renderPonds() const;
     void renderFarmers() const;
     void renderRoadTractors() const;
+    void renderBonfires() const;
     void renderCropWorkers() const;
     void renderScatteredTrees() const;
     void renderBarns() const;
@@ -72,14 +82,23 @@ private:
     Lighting lighting_;
     Farmhouse farmhouse_;
     Tractor tractor_;
-    std::array<Farmer, 6> farmers_;
-    std::array<Farmer, 12> cropWorkers_;
-    std::array<bool, 6> farmerTrafficActive_{};
-    std::array<float, 6> farmerTrafficTimers_{};
-    std::array<FarmLayout, 12> farmLayouts_;
-    std::array<float, 4> roadTractorZ_;
-    std::array<float, 4> roadTractorWheelRotation_{};
-    std::array<bool, 4> tractorTrafficActive_{};
-    std::array<float, 4> tractorTrafficTimers_{};
+    std::array<Farmer, VillageSimulationSettings::RoadPedestrianCount> farmers_;
+    std::vector<Farmer> cropWorkers_;
+    std::array<unsigned char, VillageSimulationSettings::FarmCount> cropWorkerCounts_{};
+    std::array<unsigned char, VillageSimulationSettings::FarmCount> cropWorkerStarts_{};
+    std::array<bool, VillageSimulationSettings::RoadPedestrianCount> farmerTrafficActive_{};
+    std::array<float, VillageSimulationSettings::RoadPedestrianCount> farmerTrafficTimers_{};
+    std::array<FarmLayout, VillageSimulationSettings::FarmCount> farmLayouts_;
+    std::array<float, VillageSimulationSettings::TrafficVehicleCount> roadTractorZ_;
+    std::array<float, VillageSimulationSettings::TrafficVehicleCount> roadTractorWheelRotation_{};
+    std::array<bool, VillageSimulationSettings::TrafficVehicleCount> tractorTrafficActive_{};
+    unsigned int roadsideBenchOccupancy_ = 0;
+    bool trafficRunning_ = true;
+    bool powerOn_ = true;
+    bool workersPaused_ = false;
+    bool bonfiresEnabled_ = true;
+    float powerAmount_ = 1.0f;
+    float workerSpeedTarget_ = 1.0f;
+    float workerSpeedScale_ = 1.0f;
     std::mt19937 trafficRng_;
 };

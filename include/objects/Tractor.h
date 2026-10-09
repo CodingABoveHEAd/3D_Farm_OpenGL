@@ -14,7 +14,8 @@ public:
     void update(float deltaTime);
     void drawTractor() const;
     void updateRoad(float deltaTime, float& z, float& wheelRotation);
-    void drawRoadTractor(float z, float wheelRotation, Color color) const;
+    void drawRoadTractor(float z, float wheelRotation, Color color,
+                         float animationTime, bool detailedDriver) const;
     void setNightAmount(float amount) { nightAmount_ = amount; }
 
 private:
@@ -38,5 +39,7 @@ private:
     mutable float heading_ = 0.0f;
     mutable float wheelRotation_ = 0.0f;
     mutable Color displayColor_ = Color::Red;
+    mutable float roadDriverTime_ = -1.0f;
+    mutable bool detailedRoadDriver_ = true;
     float nightAmount_ = 0.0f;
 };

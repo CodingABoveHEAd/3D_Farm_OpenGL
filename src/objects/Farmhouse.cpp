@@ -513,7 +513,10 @@ void Farmhouse::renderDoor() const
     // Wall lanterns either side of the door.
     for (float x : {-1.30f, 1.30f})
     {
-        drawBox(0.98f, 0.85f, 0.45f, x, 2.70f, 3.14f, 0.14f, 0.28f, 0.14f);
+        drawBox(0.10f + 0.88f * powerAmount_,
+                0.09f + 0.76f * powerAmount_,
+                0.07f + 0.38f * powerAmount_,
+                x, 2.70f, 3.14f, 0.14f, 0.28f, 0.14f);
         drawBox(0.15f, 0.12f, 0.10f, x, 2.865f, 3.14f, 0.18f, 0.05f, 0.18f);
         drawBox(0.15f, 0.12f, 0.10f, x, 2.535f, 3.14f, 0.16f, 0.04f, 0.16f);
     }

@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstddef>
 #include <initializer_list>
+#include <iostream>
 #include <random>
 #include <vector>
 
@@ -290,9 +291,9 @@ void buildTreeChunks()
 
         // Preserve open space around ponds, barns, the substation, and the sun.
         const float landmarks[][3] = {
-            {-72.0f, -42.0f, 25.0f},
-            { 73.0f,  24.0f, 27.0f},
-            {-71.0f,  58.0f, 23.0f},
+            {-82.0f, -42.0f, 30.0f},
+            { 73.0f,  24.0f, 29.0f},
+            {-71.0f,  58.0f, 27.0f},
             {-65.0f, -68.0f, 14.0f},
             { 65.0f, -34.0f, 14.0f},
             {-65.0f,  34.0f, 14.0f},
@@ -307,6 +308,16 @@ void buildTreeChunks()
             {
                 return false;
             }
+        }
+
+        for (int site = 0; site < VillageSimulationSettings::BonfireSiteCount; ++site)
+        {
+            const float dx = x - VillageSimulationSettings::BonfireSiteX[site];
+            const float dz = z - VillageSimulationSettings::BonfireSiteZ[site];
+            if (dx * dx + dz * dz
+                < VillageSimulationSettings::BonfireTreeClearance
+                    * VillageSimulationSettings::BonfireTreeClearance)
+                return false;
         }
 
         return true;
@@ -477,25 +488,10 @@ void drawTreeChunk(const TreeChunk& chunk, bool simplified)
 
 Scene::Scene()
     : farmers_{
-          Farmer(-2.0f, -55.0f, FarmerRoute::Road, 3.0f, 0.0f),
-          Farmer(2.0f, -45.0f, FarmerRoute::Road, 2.4f, 1.2f),
-          Farmer(-2.0f, -32.0f, FarmerRoute::Road, 2.7f, 2.1f),
-          Farmer(2.0f, -18.0f, FarmerRoute::Road, 2.2f, 2.8f),
-          Farmer(-2.0f, -4.0f, FarmerRoute::Road, 2.8f, 3.5f),
-          Farmer(2.0f, 24.0f, FarmerRoute::Road, 2.5f, 4.2f)},
-      cropWorkers_{
-          Farmer(-5.5f, -9.0f, FarmerRoute::CropWork, 1.0f, 0.3f),
-          Farmer(4.5f, -8.0f, FarmerRoute::CropWork, 0.9f, 1.1f),
-          Farmer(-3.0f, -7.0f, FarmerRoute::CropWork, 1.1f, 1.9f),
-          Farmer(5.0f, -6.0f, FarmerRoute::CropWork, 0.8f, 2.7f),
-          Farmer(-6.0f, -8.0f, FarmerRoute::CropWork, 1.0f, 3.5f),
-          Farmer(3.5f, -9.0f, FarmerRoute::CropWork, 0.9f, 4.3f),
-          Farmer(-4.5f, -6.5f, FarmerRoute::CropWork, 1.1f, 5.1f),
-          Farmer(5.5f, -8.5f, FarmerRoute::CropWork, 0.8f, 5.9f),
-          Farmer(-5.0f, -7.5f, FarmerRoute::CropWork, 1.0f, 6.7f),
-          Farmer(4.0f, -6.0f, FarmerRoute::CropWork, 0.9f, 7.5f),
-          Farmer(-3.5f, -8.5f, FarmerRoute::CropWork, 1.1f, 8.3f),
-          Farmer(5.0f, -7.0f, FarmerRoute::CropWork, 0.8f, 9.1f)},
+          Farmer(-8.5f, -55.0f, FarmerRoute::Road, 3.0f, 0.0f),
+          Farmer(8.5f, -45.0f, FarmerRoute::Road, 2.4f, 1.2f),
+          Farmer(-8.5f, -32.0f, FarmerRoute::Road, 2.7f, 2.1f),
+          Farmer(8.5f, -10.0f, FarmerRoute::Road, 2.2f, 2.8f)},
       farmLayouts_{
           FarmLayout{2, 1, true, true, -1.2f, 0.4f, 1.0f, 0.5f, -2.0f},
           FarmLayout{5, 2, false, true, 1.1f, -0.6f, -0.8f, 0.3f, 3.0f},
@@ -509,9 +505,16 @@ Scene::Scene()
           FarmLayout{5, 0, true, true, 0.5f, 0.9f, -0.9f, 0.4f, 2.5f},
           FarmLayout{3, 1, false, false, -1.1f, 0.2f, 0.6f, -0.6f, -1.5f},
           FarmLayout{4, 2, true, true, 0.9f, -0.9f, -0.7f, 0.1f, 1.5f}},
-      roadTractorZ_{-60.0f, -20.0f, 22.0f, 60.0f},
+      roadTractorZ_{},
       trafficRng_(std::random_device{}())
 {
+    constexpr float routeLength = VillageSimulationSettings::TrafficRouteMaxZ
+        - VillageSimulationSettings::TrafficRouteMinZ;
+    constexpr float trafficGap = routeLength
+        / static_cast<float>(VillageSimulationSettings::TrafficVehicleCount);
+    static_assert(trafficGap >= VillageSimulationSettings::TrafficMinimumSpacing,
+                  "Traffic route is too short for the configured safe spacing");
+
     std::uniform_int_distribution<int> chickenCountDistribution(0, 3);
     for (FarmLayout& layout : farmLayouts_)
     {
@@ -520,22 +523,80 @@ Scene::Scene()
 
     for (std::size_t index = 0; index < farmers_.size(); ++index)
     {
-        farmerTrafficActive_[index] = index % 3 != 0;
+        farmerTrafficActive_[index] = index % 2 == 0;
         farmerTrafficTimers_[index] = randomTrafficTime(
             trafficRng_,
-            farmerTrafficActive_[index] ? 18.0f : 2.0f,
-            farmerTrafficActive_[index] ? 42.0f : 10.0f);
+            farmerTrafficActive_[index]
+                ? VillageSimulationSettings::PedestrianActiveMinSeconds
+                : VillageSimulationSettings::PedestrianWaitMinSeconds,
+            farmerTrafficActive_[index]
+                ? VillageSimulationSettings::PedestrianActiveMaxSeconds
+                : VillageSimulationSettings::PedestrianWaitMaxSeconds);
         farmers_[index].setVisible(farmerTrafficActive_[index]);
     }
 
     for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
     {
-        tractorTrafficActive_[index] = index % 2 == 0;
-        tractorTrafficTimers_[index] = randomTrafficTime(
-            trafficRng_,
-            tractorTrafficActive_[index] ? 14.0f : 3.0f,
-            tractorTrafficActive_[index] ? 32.0f : 12.0f);
+        roadTractorZ_[index] = VillageSimulationSettings::TrafficRouteMinZ
+            + trafficGap * (static_cast<float>(index) + 0.5f);
+        tractorTrafficActive_[index] = true;
     }
+
+    // Randomize populations once, then retain those choices for the complete
+    // run. Sampling here (rather than while drawing) prevents visible flicker.
+    std::uniform_real_distribution<float> workerJitter(-0.35f, 0.35f);
+    constexpr float workerX[] = {-5.4f, 0.0f, 5.4f};
+    constexpr float workerZ[] = {-9.0f, -6.8f, -8.0f};
+    std::array<int, VillageSimulationSettings::FarmCount> workerCounts{};
+    static_assert(
+        VillageSimulationSettings::FarmCount
+            % (VillageSimulationSettings::MaxWorkersPerFarm + 1) == 0,
+        "Balanced worker population requires complete 0..max groups");
+    for (int farm = 0; farm < VillageSimulationSettings::FarmCount; ++farm)
+        workerCounts[farm] = farm % (VillageSimulationSettings::MaxWorkersPerFarm + 1);
+    std::shuffle(workerCounts.begin(), workerCounts.end(), trafficRng_);
+    cropWorkers_.reserve(
+        VillageSimulationSettings::FarmCount
+        * VillageSimulationSettings::MaxWorkersPerFarm);
+    for (int farm = 0; farm < VillageSimulationSettings::FarmCount; ++farm)
+    {
+        cropWorkerStarts_[farm] = static_cast<unsigned char>(cropWorkers_.size());
+        const int count = workerCounts[farm];
+        cropWorkerCounts_[farm] = static_cast<unsigned char>(count);
+        for (int worker = 0; worker < count; ++worker)
+        {
+            const float phase = 0.37f + static_cast<float>(farm) * 0.83f
+                + static_cast<float>(worker) * 2.11f;
+            const float baseSpeed = 0.82f
+                + 0.12f * static_cast<float>((farm + worker) % 3);
+            cropWorkers_.emplace_back(
+                workerX[worker] + workerJitter(trafficRng_),
+                workerZ[worker] + workerJitter(trafficRng_),
+                FarmerRoute::CropWork, baseSpeed, phase);
+        }
+    }
+
+    std::bernoulli_distribution occupied(
+        VillageSimulationSettings::BenchOccupancyChance);
+    std::bernoulli_distribution secondVisitor(0.42);
+    int occupiedBenches = 0;
+    for (int bench = 0; bench < VillageSimulationSettings::RoadsideBenchCount; ++bench)
+    {
+        const unsigned int count = occupied(trafficRng_)
+            ? (secondVisitor(trafficRng_) ? 2u : 1u) : 0u;
+        roadsideBenchOccupancy_ |= count << (bench * 2);
+        occupiedBenches += count > 0 ? 1 : 0;
+    }
+    if (occupiedBenches == 0)
+        roadsideBenchOccupancy_ |= 1u;
+    if (occupiedBenches == VillageSimulationSettings::RoadsideBenchCount)
+        roadsideBenchOccupancy_ &= ~(3u << 6);
+
+    std::cout << "SCENE_INIT crop_workers=" << cropWorkers_.size()
+              << " worker_counts=";
+    for (unsigned char count : cropWorkerCounts_)
+        std::cout << static_cast<int>(count);
+    std::cout << " bench_occupancy=" << roadsideBenchOccupancy_ << '\n';
 
     Cloud::initField();
 }
@@ -550,6 +611,35 @@ void Scene::handleInput()
     {
         animation_.togglePaused();
     }
+    if (Input::wasPressed(GLFW_KEY_T))
+    {
+        trafficRunning_ = !trafficRunning_;
+    }
+    if (Input::wasPressed(GLFW_KEY_L))
+    {
+        powerOn_ = !powerOn_;
+        animation_.setPowerOn(powerOn_);
+    }
+    if (Input::wasPressed(GLFW_KEY_O))
+    {
+        workersPaused_ = !workersPaused_;
+    }
+    if (Input::wasPressed(GLFW_KEY_B))
+    {
+        bonfiresEnabled_ = !bonfiresEnabled_;
+    }
+    if (Input::wasPressed(GLFW_KEY_LEFT_BRACKET))
+    {
+        workerSpeedTarget_ = std::max(
+            VillageSimulationSettings::WorkerSpeedMin,
+            workerSpeedTarget_ - VillageSimulationSettings::WorkerSpeedStep);
+    }
+    if (Input::wasPressed(GLFW_KEY_RIGHT_BRACKET))
+    {
+        workerSpeedTarget_ = std::min(
+            VillageSimulationSettings::WorkerSpeedMax,
+            workerSpeedTarget_ + VillageSimulationSettings::WorkerSpeedStep);
+    }
     if (Input::wasPressed(GLFW_KEY_EQUAL) || Input::wasPressed(GLFW_KEY_KP_ADD))
     {
         animation_.changeWindmillSpeed(15.0f);
@@ -563,6 +653,14 @@ void Scene::handleInput()
 void Scene::update(float deltaTime)
 {
     lighting_.update(deltaTime);
+    const float powerBlend = 1.0f - std::exp(
+        -VillageSimulationSettings::PowerFadeResponse * deltaTime);
+    powerAmount_ += ((powerOn_ ? 1.0f : 0.0f) - powerAmount_) * powerBlend;
+    const float workerBlend = 1.0f - std::exp(
+        -VillageSimulationSettings::WorkerSpeedResponse * deltaTime);
+    workerSpeedScale_ += (workerSpeedTarget_ - workerSpeedScale_) * workerBlend;
+    farmhouse_.setPowerAmount(powerAmount_);
+    PowerSubstation::setPowerAmount(powerAmount_);
     Cloud::setNightAmount(lighting_.nightAmount());
     tractor_.setNightAmount(lighting_.nightAmount());
     animation_.update(deltaTime);
@@ -572,51 +670,72 @@ void Scene::update(float deltaTime)
     }
 
     tractor_.update(deltaTime);
-    for (std::size_t index = 0; index < farmers_.size(); ++index)
+    if (trafficRunning_)
     {
-        farmerTrafficTimers_[index] -= deltaTime;
-        if (farmerTrafficTimers_[index] <= 0.0f)
+        for (std::size_t index = 0; index < farmers_.size(); ++index)
         {
-            farmerTrafficActive_[index] = !farmerTrafficActive_[index];
-            farmers_[index].setVisible(farmerTrafficActive_[index]);
-            farmerTrafficTimers_[index] = randomTrafficTime(
-                trafficRng_,
-                farmerTrafficActive_[index] ? 18.0f : 2.0f,
-                farmerTrafficActive_[index] ? 42.0f : 10.0f);
+            farmerTrafficTimers_[index] -= deltaTime;
+            if (farmerTrafficTimers_[index] <= 0.0f)
+            {
+                if (farmerTrafficActive_[index])
+                {
+                    farmerTrafficActive_[index] = false;
+                    farmers_[index].setVisible(false);
+                    farmerTrafficTimers_[index] = randomTrafficTime(
+                        trafficRng_,
+                        VillageSimulationSettings::PedestrianWaitMinSeconds,
+                        VillageSimulationSettings::PedestrianWaitMaxSeconds);
+                }
+                else
+                {
+                    bool spawnClear = true;
+                    for (std::size_t other = 0; other < farmers_.size(); ++other)
+                    {
+                        if (other == index || !farmerTrafficActive_[other]
+                            || farmers_[other].roadX() * farmers_[index].roadX() < 0.0f)
+                            continue;
+                        const float dz = std::fabs(
+                            farmers_[other].roadZ()
+                            - VillageSimulationSettings::TrafficRouteMinZ);
+                        if (dz < VillageSimulationSettings::PedestrianMinimumSpacing)
+                        {
+                            spawnClear = false;
+                            break;
+                        }
+                    }
+                    if (spawnClear)
+                    {
+                        farmerTrafficActive_[index] = true;
+                        farmers_[index].setVisible(true);
+                        farmers_[index].setRoadPosition(
+                            VillageSimulationSettings::TrafficRouteMinZ);
+                        farmerTrafficTimers_[index] = randomTrafficTime(
+                            trafficRng_,
+                            VillageSimulationSettings::PedestrianActiveMinSeconds,
+                            VillageSimulationSettings::PedestrianActiveMaxSeconds);
+                    }
+                    else
+                    {
+                        farmerTrafficTimers_[index] = randomTrafficTime(
+                            trafficRng_, 3.0f, 6.0f);
+                    }
+                }
+            }
+
             if (farmerTrafficActive_[index])
-            {
-                farmers_[index].setRoadPosition(-108.0f);
-            }
-        }
-
-        if (farmerTrafficActive_[index])
-        {
-            farmers_[index].update(deltaTime);
+                farmers_[index].update(deltaTime);
         }
     }
 
-    for (Farmer& worker : cropWorkers_)
+    if (!workersPaused_)
     {
-        worker.update(deltaTime);
+        for (Farmer& worker : cropWorkers_)
+            worker.update(deltaTime * workerSpeedScale_);
     }
 
-    for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
+    if (trafficRunning_)
     {
-        tractorTrafficTimers_[index] -= deltaTime;
-        if (tractorTrafficTimers_[index] <= 0.0f)
-        {
-            tractorTrafficActive_[index] = !tractorTrafficActive_[index];
-            tractorTrafficTimers_[index] = randomTrafficTime(
-                trafficRng_,
-                tractorTrafficActive_[index] ? 14.0f : 3.0f,
-                tractorTrafficActive_[index] ? 32.0f : 12.0f);
-            if (tractorTrafficActive_[index])
-            {
-                roadTractorZ_[index] = -78.0f;
-            }
-        }
-
-        if (tractorTrafficActive_[index])
+        for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
         {
             tractor_.updateRoad(
                 deltaTime, roadTractorZ_[index], roadTractorWheelRotation_[index]);
@@ -666,13 +785,16 @@ void Scene::render() const
     glEnable(GL_LIGHT0);
 
     PowerSubstation::drawRoadUtilities(animation_.waterTime());
+    Village::drawWorldVegetation(sphereVisible, gEye[0], gEye[2]);
     renderScatteredTrees();
     renderPonds();
     Village::drawPondSeating(animation_.waterTime());
     Village::drawRoadsideAmenities(
-        animation_.waterTime(), lighting_.nightAmount());
+        animation_.waterTime(), lighting_.nightAmount() * powerAmount_,
+        roadsideBenchOccupancy_);
     renderFarmers();
     renderRoadTractors();
+    renderBonfires();
     renderBarns();
     renderNightFixtures();
     renderCropWorkers();
@@ -712,6 +834,18 @@ void Scene::applyNightLights() const
     std::size_t count = 0;
     const auto addPoint = [&](float x, float y, float z,
                               const float color[3], float linear, float quadratic)
+    {
+        if (count >= lights.size() || powerAmount_ < 0.01f) return;
+        Lighting::LocalLight& light = lights[count++];
+        light.position[0] = x; light.position[1] = y; light.position[2] = z;
+        for (int component = 0; component < 3; ++component)
+            light.color[component] = color[component] * powerAmount_;
+        light.linearAttenuation = linear;
+        light.quadraticAttenuation = quadratic;
+    };
+    const auto addIndependentPoint = [&](float x, float y, float z,
+                                         const float color[3], float linear,
+                                         float quadratic)
     {
         if (count >= lights.size()) return;
         Lighting::LocalLight& light = lights[count++];
@@ -768,6 +902,18 @@ void Scene::applyNightLights() const
         }
     }
 
+    if (bonfiresEnabled_)
+    {
+        constexpr float fireLight[] = {1.0f, 0.30f, 0.055f};
+        for (int site = 0; site < VillageSimulationSettings::BonfireSiteCount; ++site)
+        {
+            addIndependentPoint(
+                VillageSimulationSettings::BonfireSiteX[site], 1.2f,
+                VillageSimulationSettings::BonfireSiteZ[site],
+                fireLight, 0.075f, 0.022f);
+        }
+    }
+
     std::size_t nearestTractor = roadTractorZ_.size();
     float nearestDistance = 1e30f;
     for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
@@ -805,7 +951,7 @@ void Scene::applyNightLights() const
 
 void Scene::drawNightBulb(float x, float y, float z, float scale) const
 {
-    const float night = lighting_.nightAmount();
+    const float night = lighting_.nightAmount() * powerAmount_;
     glPushMatrix();
     glTranslatef(x, y, z);
     glScalef(scale, scale, scale);
@@ -860,13 +1006,14 @@ void Scene::renderNightLightPools() const
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthMask(GL_FALSE);
 
-    const auto drawPool = [night](float x, float z, float radius, float alpha)
+    const float electricLight = night * powerAmount_;
+    const auto drawPool = [electricLight](float x, float z, float radius, float alpha)
     {
         constexpr int segments = 16;
         glBegin(GL_TRIANGLE_FAN);
         glColor4f(DayNightSettings::WarmLamp[0],
                   DayNightSettings::WarmLamp[1] * 0.86f,
-                  DayNightSettings::WarmLamp[2] * 0.55f, alpha * night);
+                  DayNightSettings::WarmLamp[2] * 0.55f, alpha * electricLight);
         glVertex3f(x, 0.10f, z);
         glColor4f(DayNightSettings::WarmLamp[0],
                   DayNightSettings::WarmLamp[1],
@@ -880,17 +1027,48 @@ void Scene::renderNightLightPools() const
         }
         glEnd();
     };
-
-    const float nearestPoleZ = std::round(gEye[2] / 24.0f) * 24.0f;
-    for (int row = -2; row <= 2; ++row)
+    const auto drawFirePool = [night](float x, float z)
     {
-        const float z = nearestPoleZ + static_cast<float>(row) * 24.0f;
-        drawPool(-5.2f, z, 7.0f, 0.14f);
-        drawPool( 5.2f, z, 7.0f, 0.14f);
+        constexpr int segments = 18;
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4f(1.0f, 0.30f, 0.045f, 0.24f * night);
+        glVertex3f(x, 0.105f, z);
+        glColor4f(1.0f, 0.62f, 0.14f, 0.0f);
+        for (int segment = 0; segment <= segments; ++segment)
+        {
+            const float angle = static_cast<float>(segment)
+                * 2.0f * 3.14159265358979323846f / static_cast<float>(segments);
+            glVertex3f(x + std::cos(angle) * 7.5f, 0.105f,
+                       z + std::sin(angle) * 7.5f);
+        }
+        glEnd();
+    };
+
+    if (electricLight > 0.001f)
+    {
+        const float nearestPoleZ = std::round(gEye[2] / 24.0f) * 24.0f;
+        for (int row = -2; row <= 2; ++row)
+        {
+            const float z = nearestPoleZ + static_cast<float>(row) * 24.0f;
+            drawPool(-5.2f, z, 7.0f, 0.14f);
+            drawPool( 5.2f, z, 7.0f, 0.14f);
+        }
+        drawPool(-12.35f, -32.0f, 5.0f, 0.12f);
+        drawPool( 12.35f,  18.0f, 5.0f, 0.12f);
+        drawPool(-12.35f,  66.0f, 5.0f, 0.12f);
     }
-    drawPool(-12.35f, -32.0f, 5.0f, 0.12f);
-    drawPool( 12.35f,  18.0f, 5.0f, 0.12f);
-    drawPool(-12.35f,  66.0f, 5.0f, 0.12f);
+
+    if (bonfiresEnabled_)
+    {
+        for (int site = 0; site < VillageSimulationSettings::BonfireSiteCount; ++site)
+        {
+            const float x = VillageSimulationSettings::BonfireSiteX[site];
+            const float z = VillageSimulationSettings::BonfireSiteZ[site];
+            if (withinDistance(
+                    x, z, VillageSimulationSettings::BonfireDrawDistance, 8.0f))
+                drawFirePool(x, z);
+        }
+    }
 
     for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
     {
@@ -951,8 +1129,8 @@ void Scene::renderCropWorkers() const
         const int layoutIndex = (row + 2) * 2;
         for (int side = 0; side < 2; ++side)
         {
-            const int workerIndex = layoutIndex + side;
-            if (!gFarmVisible[workerIndex])
+            const int farmIndex = layoutIndex + side;
+            if (!gFarmVisible[farmIndex])
             {
                 continue;
             }
@@ -964,13 +1142,16 @@ void Scene::renderCropWorkers() const
                 z);
             glScalef(farmScale, farmScale, farmScale);
             glRotatef(
-                farmLayouts_[workerIndex].rotation,
+                farmLayouts_[farmIndex].rotation,
                 0.0f, 1.0f, 0.0f);
             glTranslatef(
-                farmLayouts_[workerIndex].cropOffsetX,
+                farmLayouts_[farmIndex].cropOffsetX,
                 0.0f,
-                farmLayouts_[workerIndex].cropOffsetZ);
-            cropWorkers_[workerIndex].render();
+                farmLayouts_[farmIndex].cropOffsetZ);
+            const std::size_t start = cropWorkerStarts_[farmIndex];
+            const std::size_t count = cropWorkerCounts_[farmIndex];
+            for (std::size_t worker = 0; worker < count; ++worker)
+                cropWorkers_[start + worker].render();
             glPopMatrix();
         }
 
@@ -1016,17 +1197,26 @@ void Scene::renderScatteredTrees() const
 void Scene::renderPonds() const
 {
     // Keep the enlarged farms and ponds separated from the central road.
-    if (sphereVisible(-72.0f, 0.0f, -42.0f, 30.0f))
+    if (sphereVisible(-82.0f, 0.0f, -42.0f, 34.0f))
     {
-        Pond::draw(-72.0f, -42.0f, 27.0f, 19.0f, animation_.waterTime(),        false);
+        Pond::draw(-82.0f, -42.0f,
+                   VillageSimulationSettings::MainPondWidth,
+                   VillageSimulationSettings::MainPondDepth,
+                   animation_.waterTime(), false);
     }
-    if (sphereVisible(73.0f, 0.0f, 24.0f, 32.0f))
+    if (sphereVisible(73.0f, 0.0f, 24.0f, 34.0f))
     {
-        Pond::draw( 73.0f,  24.0f, 29.0f, 20.0f, animation_.waterTime() + 1.4f, true);
+        Pond::draw(73.0f, 24.0f,
+                   VillageSimulationSettings::SecondaryPondWidth,
+                   VillageSimulationSettings::SecondaryPondDepth,
+                   animation_.waterTime() + 1.4f, true);
     }
-    if (sphereVisible(-71.0f, 0.0f, 58.0f, 28.0f))
+    if (sphereVisible(-71.0f, 0.0f, 58.0f, 32.0f))
     {
-        Pond::draw(-71.0f,  58.0f, 25.0f, 18.0f, animation_.waterTime() + 2.8f, false);
+        Pond::draw(-71.0f, 58.0f,
+                   VillageSimulationSettings::SecondaryPondWidth,
+                   VillageSimulationSettings::SecondaryPondDepth,
+                   animation_.waterTime() + 2.8f, false);
     }
 }
 
@@ -1051,22 +1241,52 @@ void Scene::renderRoadTractors() const
         if (tractorTrafficActive_[index]
             && sphereVisible(0.0f, 2.0f, roadTractorZ_[index], 14.0f))
         {
+            const float dx = gEye[0];
+            const float dz = roadTractorZ_[index] - gEye[2];
             tractor_.drawRoadTractor(
-                roadTractorZ_[index], roadTractorWheelRotation_[index], colors[index]);
+                roadTractorZ_[index], roadTractorWheelRotation_[index], colors[index],
+                animation_.waterTime(), dx * dx + dz * dz < 42.0f * 42.0f);
+        }
+    }
+}
+
+void Scene::renderBonfires() const
+{
+    if (!bonfiresEnabled_)
+        return;
+
+    for (int site = 0; site < VillageSimulationSettings::BonfireSiteCount; ++site)
+    {
+        const float x = VillageSimulationSettings::BonfireSiteX[site];
+        const float z = VillageSimulationSettings::BonfireSiteZ[site];
+        if (sphereVisible(x, 2.0f, z, 9.0f)
+            && withinDistance(
+                x, z, VillageSimulationSettings::BonfireDrawDistance, 9.0f))
+        {
+            Village::drawBonfireSite(
+                site, animation_.waterTime(), lighting_.nightAmount());
         }
     }
 }
 
 void Scene::renderGround() const
 {
-    // The ground never changes, so it is recorded once and replayed.
+    // Geometry is static, but its unlit colour follows the day/night blend.
+    // A blackout only removes a little artificial sky fill; it does not
+    // incorrectly affect daylight or moonlight.
     static GLuint groundList = 0;
-
+    const float night = lighting_.nightAmount();
+    const float blackout = night * (1.0f - powerAmount_);
+    const float r = (0.18f + (0.045f - 0.18f) * night)
+        * (1.0f - 0.10f * blackout);
+    const float g = (0.43f + (0.095f - 0.43f) * night)
+        * (1.0f - 0.14f * blackout);
+    const float b = (0.16f + (0.060f - 0.16f) * night)
+        * (1.0f - 0.10f * blackout);
+    glDisable(GL_LIGHTING);
+    glColor3f(r, g, b);
     cachedList(groundList, []()
     {
-        glDisable(GL_LIGHTING);
-        glColor3f(0.20f, 0.50f, 0.20f);
-
         glPushMatrix();
         glTranslatef(0.0f, -0.02f, 0.0f);
         glScalef(1.0f, 1.0f, 0.85f);
@@ -1079,24 +1299,87 @@ void Scene::renderGround() const
 
 void Scene::renderRoad() const
 {
-    static GLuint roadList = 0;
+    static GLuint baseList = 0;
+    static GLuint shoulderList = 0;
+    static GLuint darkPatchList = 0;
+    static GLuint lightPatchList = 0;
+    static GLuint markingList = 0;
+    const float night = lighting_.nightAmount();
+    glDisable(GL_LIGHTING);
 
-    cachedList(roadList, []()
+    glColor3f(0.23f - 0.13f * night,
+              0.225f - 0.13f * night,
+              0.21f - 0.12f * night);
+    cachedList(baseList, []()
     {
-        glDisable(GL_LIGHTING);
-
-        glColor3f(0.22f, 0.22f, 0.20f);
         glPushMatrix();
         glTranslatef(0.0f, 0.045f, 0.0f);
         Primitives::drawPlane(9.0f, 1000.0f);
         glPopMatrix();
 
-        glColor3f(0.86f, 0.75f, 0.24f);
-        glPushMatrix();
-        glTranslatef(0.0f, 0.06f, 0.0f);
-        glScalef(0.12f, 1.0f, 1000.0f);
-        Primitives::drawCube(1.0f, 0.02f, 0.035f);
-        glPopMatrix();
+    });
+
+    glColor3f(0.31f - 0.18f * night,
+              0.235f - 0.14f * night,
+              0.135f - 0.075f * night);
+    cachedList(shoulderList, []()
+    {
+        // Worn soil shoulders soften the perfectly straight road boundary.
+        for (float x : {-4.68f, 4.68f})
+        {
+            glPushMatrix();
+            glTranslatef(x, 0.048f, 0.0f);
+            Primitives::drawPlane(0.55f, 1000.0f);
+            glPopMatrix();
+        }
+    });
+
+    const auto drawPatchGeometry = [](int parity)
+    {
+        for (int index = 0; index < 64; ++index)
+        {
+            if ((index & 1) != parity) continue;
+            const float x = -3.8f + treeScatterHash(index * 17, 9) * 7.6f;
+            const float z = -480.0f + treeScatterHash(index * 31, 27) * 960.0f;
+            const float width = 0.28f + treeScatterHash(index * 7, 51) * 0.62f;
+            const float depth = 0.55f + treeScatterHash(index * 13, 73) * 1.25f;
+            glPushMatrix();
+            glTranslatef(x, 0.052f, z);
+            glRotatef((treeScatterHash(index * 19, 91) - 0.5f) * 32.0f,
+                      0.0f, 1.0f, 0.0f);
+            Primitives::drawPlane(width, depth);
+            glPopMatrix();
+        }
+    };
+
+    glColor3f(0.205f - 0.112f * night,
+              0.202f - 0.110f * night,
+              0.190f - 0.102f * night);
+    cachedList(darkPatchList, [&]() { drawPatchGeometry(0); });
+    glColor3f(0.255f - 0.140f * night,
+              0.250f - 0.136f * night,
+              0.232f - 0.126f * night);
+    cachedList(lightPatchList, [&]() { drawPatchGeometry(1); });
+
+    glColor3f(0.82f - 0.35f * night,
+              0.70f - 0.31f * night,
+              0.22f - 0.08f * night);
+    cachedList(markingList, []()
+    {
+        // Full-length dashed centre line. Farm-row entrances intentionally
+        // get a wider break so markings never cross the access paths.
+        constexpr float farmRows[] = {-68.0f, -34.0f, 0.0f, 34.0f, 68.0f, 102.0f};
+        for (float z = -496.0f; z <= 496.0f; z += 12.0f)
+        {
+            bool entrance = false;
+            for (float row : farmRows)
+                entrance = entrance || std::fabs(z - row) < 6.0f;
+            if (entrance) continue;
+            glPushMatrix();
+            glTranslatef(0.0f, 0.061f, z);
+            Primitives::drawCube(0.13f, 0.012f, 7.0f);
+            glPopMatrix();
+        }
     });
 }
 
@@ -1405,6 +1688,22 @@ bool Scene::isNight() const
 float Scene::nightAmount() const
 {
     return lighting_.nightAmount();
+}
+
+float Scene::minimumTrafficGap() const
+{
+    std::array<float, VillageSimulationSettings::TrafficVehicleCount> positions =
+        roadTractorZ_;
+    std::sort(positions.begin(), positions.end());
+    float minimum = VillageSimulationSettings::TrafficRouteMaxZ
+        - VillageSimulationSettings::TrafficRouteMinZ;
+    for (std::size_t index = 1; index < positions.size(); ++index)
+        minimum = std::min(minimum, positions[index] - positions[index - 1]);
+    const float wrappedGap = positions.front()
+        + (VillageSimulationSettings::TrafficRouteMaxZ
+           - VillageSimulationSettings::TrafficRouteMinZ)
+        - positions.back();
+    return std::min(minimum, wrappedGap);
 }
 
 void Scene::renderSky() const

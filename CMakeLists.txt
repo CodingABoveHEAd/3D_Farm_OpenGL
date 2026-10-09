@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(Animated3DFarmScene LANGUAGES CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -43,4 +45,20 @@ if(MSVC)
     target_compile_options(Animated3DFarmScene PRIVATE /W4 /permissive-)
 else()
     target_compile_options(Animated3DFarmScene PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+if(BUILD_TESTING)
+    add_executable(CameraControlTests
+        tests/CameraControlTests.cpp
+        src/Camera.cpp
+        src/Input.cpp
+    )
+    target_include_directories(CameraControlTests PRIVATE include)
+    target_link_libraries(CameraControlTests PRIVATE glfw OpenGL::GL)
+    if(MSVC)
+        target_compile_options(CameraControlTests PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(CameraControlTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME camera_controls COMMAND CameraControlTests)
 endif()

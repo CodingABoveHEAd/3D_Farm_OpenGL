@@ -4,6 +4,7 @@ class Farmhouse
 {
 public:
     void render() const;
+    void setPowerAmount(float amount) { powerAmount_ = amount; }
 
 private:
     void renderBody() const;
@@ -20,4 +21,5 @@ private:
     void renderPorchRailings() const;
     void renderWallTrim() const;
     void renderAtticWindow() const;
+    float powerAmount_ = 1.0f;
 };

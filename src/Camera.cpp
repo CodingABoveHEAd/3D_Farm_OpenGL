@@ -12,10 +12,8 @@ constexpr float Pi = 3.14159265358979323846f;
 constexpr float MoveSpeed = 20.0f;          // units per second
 constexpr float SprintMultiplier = 3.0f;    // hold Left Shift
 constexpr float SlowMultiplier = 0.3f;      // hold Left Ctrl
-constexpr float MoveResponsiveness = 20.0f; // smooth acceleration and braking
-constexpr float LookResponsiveness = 24.0f; // smooth mouse/keyboard look
 constexpr float MouseSensitivity = 0.08f;   // degrees per pixel
-constexpr float KeyLookSpeed = 90.0f;       // degrees per second
+constexpr float KeyTurnSpeed = 90.0f;       // degrees per second
 constexpr float MaxDeltaTime = 0.25f;       // bound long focus/load-time spikes
 
 float clampPitch(float pitch)
@@ -28,6 +26,43 @@ float wrapAngle(float angle)
     while (angle > 180.0f) angle -= 360.0f;
     while (angle < -180.0f) angle += 360.0f;
     return angle;
+}
+
+void loadView(float yaw, float pitch, const float position[3], bool translate)
+{
+    const float yawRadians = yaw * Pi / 180.0f;
+    const float pitchRadians = pitch * Pi / 180.0f;
+    const float cosPitch = std::cos(pitchRadians);
+
+    // This is the same forward vector used for movement (with pitch added for
+    // looking). Building the view basis from it removes the old hidden 90
+    // degree correction and prevents rendering and controls from diverging.
+    const float forward[3] = {
+        std::cos(yawRadians) * cosPitch,
+        std::sin(pitchRadians),
+        std::sin(yawRadians) * cosPitch
+    };
+    const float right[3] = {
+        -std::sin(yawRadians), 0.0f, std::cos(yawRadians)
+    };
+    const float up[3] = {
+        -forward[1] * right[2],
+        right[2] * forward[0] - right[0] * forward[2],
+        forward[1] * right[0]
+    };
+
+    // Column-major camera matrix: rows are right, up, and -forward.
+    const GLfloat view[16] = {
+        right[0], up[0], -forward[0], 0.0f,
+        right[1], up[1], -forward[1], 0.0f,
+        right[2], up[2], -forward[2], 0.0f,
+        0.0f,     0.0f,  0.0f,       1.0f
+    };
+    glMultMatrixf(view);
+    if (translate)
+    {
+        glTranslatef(-position[0], -position[1], -position[2]);
+    }
 }
 
 }
@@ -57,12 +92,8 @@ void Camera::reset()
     position_[2] = 10.0f;
     yaw_ = -90.0f;
     pitch_ = -15.0f;
-    targetYaw_ = yaw_;
-    targetPitch_ = pitch_;
     fieldOfView_ = 45.0f;
     firstMouse_ = true;
-
-    velocity_[0] = velocity_[1] = velocity_[2] = 0.0f;
 }
 
 void Camera::update(GLFWwindow* window, float deltaTime)
@@ -84,7 +115,7 @@ void Camera::update(GLFWwindow* window, float deltaTime)
             {
                 setMouseLook(window, false);
             }
-            velocity_[0] = velocity_[1] = velocity_[2] = 0.0f;
+            Input::clear();
             previousLeftMouse_ = false;
             return;
         }
@@ -106,41 +137,41 @@ void Camera::update(GLFWwindow* window, float deltaTime)
         }
     }
 
-    // ---- Keyboard look (always available) ----
-    if (Input::isDown(GLFW_KEY_LEFT))  targetYaw_ -= KeyLookSpeed * deltaTime;
-    if (Input::isDown(GLFW_KEY_RIGHT)) targetYaw_ += KeyLookSpeed * deltaTime;
-    if (Input::isDown(GLFW_KEY_UP))    targetPitch_ += KeyLookSpeed * deltaTime;
-    if (Input::isDown(GLFW_KEY_DOWN))  targetPitch_ -= KeyLookSpeed * deltaTime;
+    // ---- Keyboard heading (always available) ----
+    // A/D deliberately rotate in place. Summing the two signed key states
+    // makes opposing inputs cancel and lets W/S continue moving while yaw is
+    // updated each frame. Arrow keys remain equivalent alternate controls.
+    float turn = 0.0f;
+    if (Input::isDown(GLFW_KEY_A))     turn -= 1.0f;
+    if (Input::isDown(GLFW_KEY_D))     turn += 1.0f;
+    if (Input::isDown(GLFW_KEY_LEFT))  turn -= 1.0f;
+    if (Input::isDown(GLFW_KEY_RIGHT)) turn += 1.0f;
+    turn = std::max(-1.0f, std::min(1.0f, turn));
+    yaw_ = wrapAngle(yaw_ + turn * KeyTurnSpeed * deltaTime);
 
-    targetPitch_ = clampPitch(targetPitch_);
-    const float lookBlend = 1.0f - std::exp(-LookResponsiveness * deltaTime);
-    yaw_ += wrapAngle(targetYaw_ - yaw_) * lookBlend;
-    pitch_ += (targetPitch_ - pitch_) * lookBlend;
+    float pitchInput = 0.0f;
+    if (Input::isDown(GLFW_KEY_UP))   pitchInput += 1.0f;
+    if (Input::isDown(GLFW_KEY_DOWN)) pitchInput -= 1.0f;
+    pitch_ = clampPitch(pitch_ + pitchInput * KeyTurnSpeed * deltaTime);
 
     // ---- Movement ----
     const float yawRad = yaw_ * Pi / 180.0f;
-    // W/S use horizontal camera-forward and A/D use horizontal camera-right.
-    // Looking up or down never changes the height of WASD movement.
+    // W/S use the horizontal projection of the exact heading used by the
+    // view matrix. Looking up or down therefore never changes camera height.
     const float fwdX = std::cos(yawRad);
     const float fwdZ = std::sin(yawRad);
-    const float rightX = -std::sin(yawRad);
-    const float rightZ = std::cos(yawRad);
 
     float forward = 0.0f;
-    float strafe = 0.0f;
     float lift = 0.0f;
 
     if (Input::isDown(GLFW_KEY_W)) forward += 1.0f;
     if (Input::isDown(GLFW_KEY_S)) forward -= 1.0f;
-    if (Input::isDown(GLFW_KEY_D)) strafe += 1.0f;
-    if (Input::isDown(GLFW_KEY_A)) strafe -= 1.0f;
     if (Input::isDown(GLFW_KEY_Q)) lift += 1.0f;   // up
     if (Input::isDown(GLFW_KEY_E)) lift -= 1.0f;   // down
 
-    // Build the wish direction, then normalize so diagonals aren't faster
-    float dirX = fwdX * forward + rightX * strafe;
+    float dirX = fwdX * forward;
     float dirY = lift;
-    float dirZ = fwdZ * forward + rightZ * strafe;
+    float dirZ = fwdZ * forward;
 
     const float length = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
     if (length > 1.0f)
@@ -154,25 +185,11 @@ void Camera::update(GLFWwindow* window, float deltaTime)
     if (Input::isDown(GLFW_KEY_LEFT_SHIFT))   speed *= SprintMultiplier;
     if (Input::isDown(GLFW_KEY_LEFT_CONTROL)) speed *= SlowMultiplier;
 
-    // Ease toward target velocity (smooth start and stop)
-    const float decay = std::exp(-MoveResponsiveness * deltaTime);
-    const float targetVelocity[3] = {dirX * speed, dirY * speed, dirZ * speed};
-    for (int axis = 0; axis < 3; ++axis)
-    {
-        const float oldVelocity = velocity_[axis];
-        // Exact integration of exponential acceleration for this frame. This
-        // keeps travel distance consistent at low and high frame rates.
-        position_[axis] += targetVelocity[axis] * deltaTime
-            + (oldVelocity - targetVelocity[axis])
-                * (1.0f - decay) / MoveResponsiveness;
-        velocity_[axis] = targetVelocity[axis]
-            + (oldVelocity - targetVelocity[axis]) * decay;
-    }
-
-    for (float& v : velocity_)
-    {
-        if (std::fabs(v) < 0.001f) v = 0.0f;
-    }
+    // Direct integration makes release immediate, while delta time keeps both
+    // movement and turning independent of frame rate.
+    position_[0] += dirX * speed * deltaTime;
+    position_[1] += dirY * speed * deltaTime;
+    position_[2] += dirZ * speed * deltaTime;
 
     if (Input::wasPressed(GLFW_KEY_R))
     {
@@ -200,9 +217,10 @@ void Camera::onMouseMove(double xPosition, double yPosition)
         return;
     }
 
-    // Applied immediately: no mouse lag, feels like a real game
-    targetYaw_ += static_cast<float>(dx) * MouseSensitivity;
-    targetPitch_ = clampPitch(targetPitch_ + static_cast<float>(dy) * MouseSensitivity);
+    // Mouse and keyboard modify the same orientation, so switching between
+    // them cannot snap or reset the heading.
+    yaw_ = wrapAngle(yaw_ + static_cast<float>(dx) * MouseSensitivity);
+    pitch_ = clampPitch(pitch_ + static_cast<float>(dy) * MouseSensitivity);
 }
 
 void Camera::applyProjection(int width, int height) const
@@ -222,9 +240,7 @@ void Camera::applyView() const
 {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glRotatef(-pitch_, 1.0f, 0.0f, 0.0f);
-    glRotatef(-yaw_ - 90.0f, 0.0f, 1.0f, 0.0f);
-    glTranslatef(-position_[0], -position_[1], -position_[2]);
+    loadView(yaw_, pitch_, position_, true);
 }
 
 void Camera::setPose(float x, float y, float z, float yaw, float pitch)
@@ -234,15 +250,11 @@ void Camera::setPose(float x, float y, float z, float yaw, float pitch)
     position_[2] = z;
     yaw_ = wrapAngle(yaw);
     pitch_ = clampPitch(pitch);
-    targetYaw_ = yaw_;
-    targetPitch_ = pitch_;
-    velocity_[0] = velocity_[1] = velocity_[2] = 0.0f;
 }
 
 void Camera::applySkyView() const
 {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glRotatef(-pitch_, 1.0f, 0.0f, 0.0f);
-    glRotatef(-yaw_ - 90.0f, 0.0f, 1.0f, 0.0f);
+    loadView(yaw_, pitch_, position_, false);
 }

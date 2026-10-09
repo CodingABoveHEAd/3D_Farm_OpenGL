@@ -28,6 +28,9 @@ constexpr Color kBlack    {0.03f, 0.02f, 0.02f};
 constexpr Color kTag      {0.95f, 0.80f, 0.10f};
 constexpr Color kGrass    {0.28f, 0.60f, 0.16f};
 constexpr Color kShadow   {0.09f, 0.13f, 0.07f};
+constexpr Color kCollar   {0.34f, 0.07f, 0.045f};
+constexpr Color kBrass    {0.78f, 0.54f, 0.13f};
+constexpr Color kMouth    {0.30f, 0.12f, 0.12f};
 
 // Chicken palette
 constexpr Color kComb      {0.80f, 0.08f, 0.07f};
@@ -134,14 +137,19 @@ void drawLeg(float x, float z, bool rear)
     drawCyl(lower, {x, 0.20f, z}, 0.115f, 0.68f);                                    // cannon bone
     drawEllipsoid(lower, {x, 0.22f, z}, {0.14f, 0.11f, 0.15f});                      // fetlock
 
+    // Paired dewclaws sit above and behind the main hoof.
+    drawEllipsoid(kHoof, {x - 0.08f * side, 0.30f, z + 0.11f}, {0.045f, 0.075f, 0.055f}, 22.0f, 0.0f, 0.0f, 6, 4);
+    drawEllipsoid(kHoof, {x + 0.08f * side, 0.30f, z + 0.11f}, {0.045f, 0.075f, 0.055f}, 22.0f, 0.0f, 0.0f, 6, 4);
+
     // Cloven hoof
-    drawBox(kHoof, {x - 0.07f * side, 0.07f, z - 0.05f}, {0.14f, 0.14f, 0.30f});
-    drawBox(kHoof, {x + 0.07f * side, 0.07f, z - 0.05f}, {0.14f, 0.14f, 0.30f});
+    drawBox(kHoof, {x - 0.072f, 0.07f, z - 0.07f}, {0.125f, 0.14f, 0.30f}, 0.0f, -4.0f, 0.0f);
+    drawBox(kHoof, {x + 0.072f, 0.07f, z - 0.07f}, {0.125f, 0.14f, 0.30f}, 0.0f,  4.0f, 0.0f);
 }
 
 void drawHorn(float side)
 {
     drawCyl(kHorn,          {0.40f * side, 1.42f, -2.30f}, 0.080f, 0.24f, 0.0f, -60.0f * side, 8);
+    drawEllipsoid(shade(kHorn, 0.72f), {0.45f * side, 1.45f, -2.30f}, {0.09f, 0.045f, 0.09f}, 0, 0, 0, 8, 4);
     drawCyl(shade(kHorn, 0.95f), {0.61f * side, 1.54f, -2.30f}, 0.058f, 0.24f, 0.0f, -20.0f * side, 8);
     drawEllipsoid(shade(kHorn, 0.75f), {0.66f * side, 1.77f, -2.30f}, {0.05f, 0.07f, 0.05f}, 0, 0, 0, 8, 6);
 }
@@ -159,7 +167,7 @@ void drawEar(float side, float flick)
     glPopMatrix();
 }
 
-void drawHead(float bob, float chew, float graze)
+void drawHead(float bob, float chew, float graze, float blink, float bellSway)
 {
     glPushMatrix();
     glTranslatef(0.0f, bob, 0.0f);
@@ -169,6 +177,17 @@ void drawHead(float bob, float chew, float graze)
     drawEllipsoid(shade(kHide, .97f), {0.0f, 1.52f, -2.00f}, {0.50f, 0.55f, 0.68f}, -42.0f);
     drawEllipsoid(shade(kHideDark, .9f), {0.0f, 1.10f, -1.75f}, {0.26f, 0.42f, 0.55f}, -35.0f);
 
+    // A low-profile collar follows the neck contour. The bell hangs from the
+    // throat and moves only a little, keeping the silhouette readable.
+    drawEllipsoid(kCollar, {0.0f, 1.50f, -1.94f}, {0.52f, 0.10f, 0.51f}, -42.0f, 0.0f, 0.0f, 14, 8);
+    glPushMatrix();
+    glTranslatef(0.0f, 1.08f, -2.03f);
+    glRotatef(bellSway, 0.0f, 0.0f, 1.0f);
+    drawBox(shade(kCollar, 0.72f), {0.0f, 0.08f, 0.0f}, {0.075f, 0.20f, 0.07f});
+    drawEllipsoid(kBrass, {0.0f, -0.08f, 0.0f}, {0.15f, 0.17f, 0.13f}, 0, 0, 0, 10, 8);
+    drawEllipsoid(shade(kBrass, 0.58f), {0.0f, -0.22f, 0.0f}, {0.055f, 0.055f, 0.05f}, 0, 0, 0, 8, 6);
+    glPopMatrix();
+
     // Skull, brow, muzzle
     drawEllipsoid(kHide,   {0.0f, 1.05f, -2.55f}, {0.48f, 0.52f, 0.64f}, -35.0f);
     drawEllipsoid(shade(kHide, .93f), {0.0f, 1.32f, -2.42f}, {0.44f, 0.16f, 0.28f}, -20.0f);
@@ -177,6 +196,7 @@ void drawHead(float bob, float chew, float graze)
 
     // Lower jaw (chews)
     drawEllipsoid(shade(kHideDark, .9f), {0.0f, 0.45f, -2.90f}, {0.30f, 0.12f, 0.30f}, -10.0f + chew);
+    drawEllipsoid(kMouth, {0.0f, 0.50f, -3.22f}, {0.23f, 0.025f, 0.035f}, -12.0f, 0.0f, 0.0f, 10, 4);
 
     // Nostrils
     for (float s : {-1.0f, 1.0f})
@@ -186,7 +206,11 @@ void drawHead(float bob, float chew, float graze)
     for (float s : {-1.0f, 1.0f}) {
         drawEllipsoid(kEyeWhite, {0.40f * s, 1.20f, -2.62f}, {0.10f, 0.09f, 0.09f}, 0, 0, 0, 10, 8);
         drawEllipsoid(kBlack,    {0.46f * s, 1.20f, -2.63f}, {0.06f, 0.07f, 0.07f}, 0, 0, 0, 8, 6);
+        drawEllipsoid(kEyeWhite, {0.50f * s, 1.23f, -2.66f}, {0.018f, 0.018f, 0.018f}, 0, 0, 0, 6, 4);
         drawEllipsoid(shade(kHideDark, .85f), {0.41f * s, 1.28f, -2.62f}, {0.12f, 0.04f, 0.11f}, 0, 0, 0, 8, 6);
+        if (blink > 0.0f)
+            drawEllipsoid(kHideDark, {0.46f * s, 1.20f, -2.64f},
+                          {0.075f, 0.075f * blink, 0.075f}, 0, 0, 0, 8, 6);
     }
 
     // Forelock tuft
@@ -447,20 +471,31 @@ void drawChickenModel(const Plumage& p, bool rooster, const ChickenPose& k)
 void drawCow(float x, float z, float scale, float rotation, float animationTime)
 {
     const float t        = animationTime;
+    const float seed     = x * 0.37f + z * 0.23f;
     const float grazeWave = 0.5f + 0.5f * std::sin(
         t * 0.42f + x * 0.31f + z * 0.17f);
     const float grazing = clamp01((grazeWave - 0.20f) / 0.42f);
-    const float tailSway = 12.0f * std::sin(t * 1.6f);
-    const float earFlick = 6.0f  * std::sin(t * 3.1f);
-    const float headBob  = 0.03f * std::sin(t * 0.9f)
+    const float flySwat = std::pow(std::max(0.0f, std::sin(t * 0.73f + seed)), 10.0f);
+    const float tailSway = 7.0f * std::sin(t * 1.15f + seed) + 20.0f * flySwat;
+    const float earFlick = 18.0f * std::pow(
+        std::max(0.0f, std::sin(t * 0.61f + seed * 1.7f)), 16.0f);
+    const float headBob  = 0.03f * std::sin(t * 0.9f + seed)
         + (1.0f - grazing) * 0.58f;
-    const float breath   = 1.0f + 0.012f * std::sin(t * 1.3f);
-    const float chew     = grazing * 5.0f * std::sin(t * 4.5f);
+    const float breath   = 1.0f + 0.012f * std::sin(t * 1.3f + seed);
+    const float chew     = grazing * 5.0f * std::sin(t * 4.5f + seed);
+    const float blinkCycle = std::fmod(t * 0.29f + std::fabs(seed), 1.0f);
+    const float blink    = blinkCycle < 0.045f
+        ? std::sin(blinkCycle / 0.045f * 3.14159265f) : 0.0f;
+    const float bellSway = 3.0f * std::sin(t * 0.8f + seed) * (0.25f + grazing);
 
     glPushMatrix();
     glTranslatef(x, 0.0f, z);
     glRotatef(rotation, 0.0f, 1.0f, 0.0f);
     glScalef(scale, scale, scale);
+
+    // A soft contact patch grounds the hooves and makes the leg spacing much
+    // easier to read, especially under the low night lighting.
+    drawEllipsoid(kShadow, {0.0f, 0.018f, 0.05f}, {0.92f, 0.018f, 1.72f}, 0, 0, 0, 16, 6);
 
     // --- Torso: barrel + chest + rump, with breathing ---
     drawEllipsoid(kHide,  {0.0f, 1.70f,  0.00f}, {0.98f * breath, 0.95f * breath, 1.75f});
@@ -493,7 +528,7 @@ void drawCow(float x, float z, float scale, float rotation, float animationTime)
     for (int blade = -2; blade <= 2; ++blade)
         drawBox(kGrass, {blade * 0.18f, 0.16f, -3.05f + 0.08f * (blade & 1)},
                 {0.035f, 0.32f, 0.035f}, blade * 8.0f, 0.0f, blade * 4.0f);
-    drawHead(headBob, chew, grazing);
+    drawHead(headBob, chew, grazing, blink, bellSway);
     glPushMatrix();
     glTranslatef(0.0f, headBob, 0.0f);
     drawEar(-1.0f,  earFlick);

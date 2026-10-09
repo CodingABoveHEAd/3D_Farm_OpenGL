@@ -85,6 +85,7 @@ bool Application::initialize(int width, int height, const char* title)
     glfwSetWindowUserPointer(window_, this);
     glfwSetFramebufferSizeCallback(window_, framebufferSizeCallback);
     glfwSetCursorPosCallback(window_, cursorPositionCallback);
+    glfwSetWindowFocusCallback(window_, windowFocusCallback);
     glfwSetWindowSizeLimits(window_, 640, 360, GLFW_DONT_CARE, GLFW_DONT_CARE);
 
     glEnable(GL_DEPTH_TEST);
@@ -211,6 +212,24 @@ void Application::cursorPositionCallback(GLFWwindow* window, double xPosition, d
     }
 }
 
+void Application::windowFocusCallback(GLFWwindow* window, int focused)
+{
+    if (focused == GLFW_TRUE)
+    {
+        return;
+    }
+
+    // Clear held actions at the focus event rather than waiting for GLFW's
+    // synthetic releases. Also release capture so returning to the window
+    // cannot create a large mouse-look jump.
+    Input::clear();
+    auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
+    if (application && application->camera_.isMouseCaptured())
+    {
+        application->camera_.setMouseLook(window, false);
+    }
+}
+
 void Application::toggleFullscreen()
 {
     if (!window_)
@@ -270,7 +289,13 @@ void Application::updatePerformanceStats(double now)
               << framesPerSecond << " FPS | "
               << (1000.0 / std::max(0.001, framesPerSecond)) << " ms | "
               << (verticalSync_ ? "VSync" : "Uncapped")
-              << (fullscreen_ ? " | Fullscreen" : " | Windowed");
+              << (fullscreen_ ? " | Fullscreen" : " | Windowed")
+              << (scene_.isNight() ? " | Night" : " | Day")
+              << (scene_.isPowerOn() ? " | Power ON" : " | POWER OUT")
+              << (scene_.isTrafficRunning() ? " | Traffic ON" : " | Traffic PAUSED")
+              << (scene_.areBonfiresEnabled() ? " | Fires ON" : " | Fires OFF")
+              << (scene_.areWorkersPaused() ? " | Workers PAUSED" : " | Workers ON")
+              << " x" << std::setprecision(2) << scene_.workerSpeed();
         glfwSetWindowTitle(window_, title.str().c_str());
         statsFrameCount_ = 0;
         statsStartTime_ = now;
@@ -305,7 +330,15 @@ void Application::updatePerformanceStats(double now)
                   << " yaw=" << camera_.yawDegrees()
                   << " pitch=" << camera_.pitchDegrees()
                   << " night=" << std::setprecision(3)
-                  << scene_.nightAmount() << '\n';
+                  << scene_.nightAmount()
+                  << " power=" << (scene_.isPowerOn() ? 1 : 0)
+                  << " traffic=" << (scene_.isTrafficRunning() ? 1 : 0)
+                  << " bonfires=" << (scene_.areBonfiresEnabled() ? 1 : 0)
+                  << " traffic_gap=" << std::setprecision(2)
+                  << scene_.minimumTrafficGap()
+                  << " crop_workers=" << scene_.cropWorkerCount()
+                  << " workers_paused=" << (scene_.areWorkersPaused() ? 1 : 0)
+                  << " work_speed=" << scene_.workerSpeed() << '\n';
         glfwSetWindowShouldClose(window_, GLFW_TRUE);
         benchmarkDuration_ = 0.0;
     }

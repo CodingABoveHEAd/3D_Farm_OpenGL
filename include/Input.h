@@ -6,6 +6,7 @@ class Input {
 public:
     static void initialize(GLFWwindow* window);
     static void update(GLFWwindow* window);
+    static void clear();
     static bool isDown(int key);
     static bool wasPressed(int key);
 
