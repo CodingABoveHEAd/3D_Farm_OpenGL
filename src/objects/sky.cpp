@@ -1,5 +1,6 @@
 #include "objects/sky.h"
 
+#include "DayNightSettings.h"
 #include "graphics/Primitives.h"
 
 #include <GLFW/glfw3.h>
@@ -10,11 +11,8 @@ namespace {
 
 const float PI = 3.14159265f;
 
-// Set by setClearColor() so drawSun() knows whether it is day or night.
-bool gNight = false;
-
-// Sun / moon position in the world
-const float SUN_X = -10.0f, SUN_Y = 14.0f, SUN_Z = -18.0f;
+// Set before the frame clear so the sky and celestial bodies share one blend.
+float gNightAmount = 0.0f;
 
 // Dome radius. If your camera far plane is closer than this, lower it.
 const float DOME_R = 90.0f;
@@ -48,32 +46,32 @@ RGB skyColor(float h, float s)
 {
     if (h < 0.0f) h = 0.0f;
 
-    if (gNight) {
-        const RGB horizon = {0.10f, 0.13f, 0.28f};
-        const RGB mid     = {0.04f, 0.06f, 0.17f};
-        const RGB zenith  = {0.01f, 0.02f, 0.07f};
-        RGB c = (h < 0.35f) ? mix(horizon, mid, h / 0.35f)
-                            : mix(mid, zenith, (h - 0.35f) / 0.65f);
-        // faint moon glow
-        float g = powf(s, 8.0f) * 0.10f;
-        return { c.r + g * 0.6f, c.g + g * 0.7f, c.b + g };
-    }
+    const RGB dayHorizon = {DayNightSettings::DaySkyHorizon[0],
+        DayNightSettings::DaySkyHorizon[1], DayNightSettings::DaySkyHorizon[2]};
+    const RGB dayMid = {DayNightSettings::DaySkyMid[0],
+        DayNightSettings::DaySkyMid[1], DayNightSettings::DaySkyMid[2]};
+    const RGB dayZenith = {DayNightSettings::DaySkyZenith[0],
+        DayNightSettings::DaySkyZenith[1], DayNightSettings::DaySkyZenith[2]};
+    RGB day = (h < 0.30f) ? mix(dayHorizon, dayMid, h / 0.30f)
+                          : mix(dayMid, dayZenith, (h - 0.30f) / 0.70f);
+    const float dayGlow = powf(s, 6.0f) * 0.45f;
+    day.r = fminf(1.0f, day.r + dayGlow * 0.55f);
+    day.g = fminf(1.0f, day.g + dayGlow * 0.38f);
+    day.b = fminf(1.0f, day.b + dayGlow * 0.05f);
 
-    const RGB horizon = {0.84f, 0.92f, 0.98f};   // pale haze
-    const RGB mid     = {0.50f, 0.74f, 0.96f};
-    const RGB zenith  = {0.20f, 0.46f, 0.86f};   // deeper blue overhead
-    RGB c = (h < 0.30f) ? mix(horizon, mid, h / 0.30f)
-                        : mix(mid, zenith, (h - 0.30f) / 0.70f);
-
-    // warm glow around the sun
-    float g = powf(s, 6.0f) * 0.45f;
-    c.r += g * 0.55f;
-    c.g += g * 0.38f;
-    c.b += g * 0.05f;
-    if (c.r > 1.0f) c.r = 1.0f;
-    if (c.g > 1.0f) c.g = 1.0f;
-    if (c.b > 1.0f) c.b = 1.0f;
-    return c;
+    const RGB nightHorizon = {DayNightSettings::NightSkyHorizon[0],
+        DayNightSettings::NightSkyHorizon[1], DayNightSettings::NightSkyHorizon[2]};
+    const RGB nightMid = {DayNightSettings::NightSkyMid[0],
+        DayNightSettings::NightSkyMid[1], DayNightSettings::NightSkyMid[2]};
+    const RGB nightZenith = {DayNightSettings::NightSkyZenith[0],
+        DayNightSettings::NightSkyZenith[1], DayNightSettings::NightSkyZenith[2]};
+    RGB night = (h < 0.35f) ? mix(nightHorizon, nightMid, h / 0.35f)
+                            : mix(nightMid, nightZenith, (h - 0.35f) / 0.65f);
+    const float moonGlow = powf(s, 8.0f) * 0.12f;
+    night.r += moonGlow * 0.55f;
+    night.g += moonGlow * 0.68f;
+    night.b += moonGlow;
+    return mix(day, night, gNightAmount);
 }
 
 // Gradient hemisphere, drawn with depth test ON so it only shows where
@@ -85,9 +83,19 @@ void drawDome()
     const float elMin = -0.14f;
     const float elMax = PI * 0.5f;
 
-    // sun direction (normalised)
-    float sl = sqrtf(SUN_X * SUN_X + SUN_Y * SUN_Y + SUN_Z * SUN_Z);
-    float sx = SUN_X / sl, sy = SUN_Y / sl, sz = SUN_Z / sl;
+    // Follow the celestial body during the transition so its glow remains
+    // visually attached to the sun or moon.
+    const float bodyX = DayNightSettings::SunPosition[0]
+        + (DayNightSettings::MoonPosition[0] - DayNightSettings::SunPosition[0])
+            * gNightAmount;
+    const float bodyY = DayNightSettings::SunPosition[1]
+        + (DayNightSettings::MoonPosition[1] - DayNightSettings::SunPosition[1])
+            * gNightAmount;
+    const float bodyZ = DayNightSettings::SunPosition[2]
+        + (DayNightSettings::MoonPosition[2] - DayNightSettings::SunPosition[2])
+            * gNightAmount;
+    const float sl = sqrtf(bodyX * bodyX + bodyY * bodyY + bodyZ * bodyZ);
+    const float sx = bodyX / sl, sy = bodyY / sl, sz = bodyZ / sl;
 
     for (int i = 0; i < RINGS; ++i) {
         // ease elevation so more rings are near the horizon
@@ -113,9 +121,11 @@ void drawDome()
     }
 }
 
-void drawStars()
+void drawStars(float animationTime)
 {
-    const float t = static_cast<float>(glfwGetTime());
+    const float t = animationTime;
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glPointSize(2.0f);
     glBegin(GL_POINTS);
     for (int i = 0; i < 260; ++i) {
@@ -126,11 +136,13 @@ void drawStars()
 
         float twinkle = 0.65f + 0.35f * sinf(t * (1.0f + hashf(i) * 2.5f) + i);
         float b = (0.55f + 0.45f * hashf(i * 7)) * twinkle;
-        glColor3f(b, b, b * 1.05f > 1.0f ? 1.0f : b * 1.05f);
+        glColor4f(b, b, b * 1.05f > 1.0f ? 1.0f : b * 1.05f,
+                  gNightAmount);
         float r = DOME_R * 0.96f;
         glVertex3f(x * r, y * r, z * r);
     }
     glEnd();
+    glDisable(GL_BLEND);
 }
 
 // Radial disc facing +Z: centre colour/alpha -> transparent edge
@@ -148,12 +160,13 @@ void glowDisc(float radius, const RGB& c, float centerAlpha, int segs = 48)
 }
 
 // Solid disc with a slightly darker rim
-void solidDisc(float radius, const RGB& centre, const RGB& rim, int segs = 48)
+void solidDisc(float radius, const RGB& centre, const RGB& rim,
+               float opacity = 1.0f, int segs = 48)
 {
     glBegin(GL_TRIANGLE_FAN);
-    glColor3f(centre.r, centre.g, centre.b);
+    glColor4f(centre.r, centre.g, centre.b, opacity);
     glVertex3f(0.0f, 0.0f, 0.0f);
-    glColor3f(rim.r, rim.g, rim.b);
+    glColor4f(rim.r, rim.g, rim.b, opacity);
     for (int i = 0; i <= segs; ++i) {
         float a = 2.0f * PI * i / segs;
         glVertex3f(radius * cosf(a), radius * sinf(a), 0.0f);
@@ -161,18 +174,18 @@ void solidDisc(float radius, const RGB& centre, const RGB& rim, int segs = 48)
     glEnd();
 }
 
-void drawSunBody()
+void drawSunBody(float animationTime, float opacity)
 {
-    const float t = static_cast<float>(glfwGetTime());
+    const float t = animationTime;
 
     // --- glow layers (additive, no depth writes) ---
     glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
-    glowDisc(10.0f, {1.00f, 0.80f, 0.40f}, 0.28f);
-    glowDisc( 6.0f, {1.00f, 0.88f, 0.50f}, 0.45f);
-    glowDisc( 3.6f, {1.00f, 0.95f, 0.70f}, 0.70f);
+    glowDisc(10.0f, {1.00f, 0.80f, 0.40f}, 0.28f * opacity);
+    glowDisc( 6.0f, {1.00f, 0.88f, 0.50f}, 0.45f * opacity);
+    glowDisc( 3.6f, {1.00f, 0.95f, 0.70f}, 0.70f * opacity);
 
     // --- slowly rotating rays ---
     glPushMatrix();
@@ -183,7 +196,7 @@ void drawSunBody()
         float a  = 2.0f * PI * i / RAYS;
         float w  = 0.10f;
         float len = (i % 2 == 0) ? 7.5f : 5.5f;
-        glColor4f(1.0f, 0.92f, 0.55f, 0.35f);
+        glColor4f(1.0f, 0.92f, 0.55f, 0.35f * opacity);
         glVertex3f(2.0f * cosf(a - w), 2.0f * sinf(a - w), 0.0f);
         glVertex3f(2.0f * cosf(a + w), 2.0f * sinf(a + w), 0.0f);
         glColor4f(1.0f, 0.92f, 0.55f, 0.0f);
@@ -192,27 +205,28 @@ void drawSunBody()
     glEnd();
     glPopMatrix();
 
-    glDisable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthMask(GL_TRUE);
 
     // --- bright core ---
     // Keep depth testing active so nearby scene geometry can occlude the sun.
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    solidDisc(2.0f, {1.00f, 0.99f, 0.85f}, {1.00f, 0.88f, 0.40f});
+    solidDisc(2.0f, {1.00f, 0.99f, 0.85f}, {1.00f, 0.88f, 0.40f}, opacity);
+    glDisable(GL_BLEND);
 }
 
-void drawMoonBody()
+void drawMoonBody(float opacity)
 {
     glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glowDisc(8.0f, {0.45f, 0.55f, 0.90f}, 0.22f);
-    glowDisc(4.5f, {0.70f, 0.78f, 1.00f}, 0.40f);
-    glDisable(GL_BLEND);
+    glowDisc(8.0f, {0.45f, 0.55f, 0.90f}, 0.22f * opacity);
+    glowDisc(4.5f, {0.70f, 0.78f, 1.00f}, 0.40f * opacity);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthMask(GL_TRUE);
 
-    solidDisc(1.8f, {0.96f, 0.97f, 1.00f}, {0.82f, 0.85f, 0.94f});
+    solidDisc(1.8f, {0.96f, 0.97f, 1.00f}, {0.82f, 0.85f, 0.94f}, opacity);
 
     // craters
     struct Cr { float x, y, r; };
@@ -224,9 +238,10 @@ void drawMoonBody()
     for (const Cr& c : craters) {
         glPushMatrix();
         glTranslatef(c.x, c.y, 0.02f);
-        solidDisc(c.r, {0.78f, 0.81f, 0.90f}, {0.86f, 0.89f, 0.96f}, 16);
+        solidDisc(c.r, {0.78f, 0.81f, 0.90f}, {0.86f, 0.89f, 0.96f}, opacity, 16);
         glPopMatrix();
     }
+    glDisable(GL_BLEND);
 }
 
 } // namespace
@@ -235,7 +250,7 @@ void drawMoonBody()
 // ============================================================
 //  Sky (dome) + Sun / Moon
 // ============================================================
-void drawSun()
+void drawSun(float animationTime)
 {
     glPushAttrib(GL_ENABLE_BIT | GL_DEPTH_BUFFER_BIT |
                  GL_COLOR_BUFFER_BIT | GL_CURRENT_BIT | GL_POINT_BIT);
@@ -243,19 +258,33 @@ void drawSun()
     glDisable(GL_LIGHTING);
     glDisable(GL_CULL_FACE);
     glDisable(GL_TEXTURE_2D);
+    glDisable(GL_FOG);
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
 
     // 1. Gradient sky (only visible where nothing else was drawn)
     glPushMatrix();
     drawDome();
-    if (gNight) drawStars();
+    if (gNightAmount > 0.001f) drawStars(animationTime);
     glPopMatrix();
 
     // 2. Sun or moon
-    glPushMatrix();
-    glTranslatef(SUN_X, SUN_Y, SUN_Z);
-    if (gNight) drawMoonBody();
-    else        drawSunBody();
-    glPopMatrix();
+    if (gNightAmount < 0.999f) {
+        glPushMatrix();
+        glTranslatef(DayNightSettings::SunPosition[0],
+                     DayNightSettings::SunPosition[1],
+                     DayNightSettings::SunPosition[2]);
+        drawSunBody(animationTime, 1.0f - gNightAmount);
+        glPopMatrix();
+    }
+    if (gNightAmount > 0.001f) {
+        glPushMatrix();
+        glTranslatef(DayNightSettings::MoonPosition[0],
+                     DayNightSettings::MoonPosition[1],
+                     DayNightSettings::MoonPosition[2]);
+        drawMoonBody(gNightAmount);
+        glPopMatrix();
+    }
 
     glPopAttrib();
 }
@@ -264,15 +293,17 @@ void drawSun()
 // ============================================================
 //  Sky clear color (fallback behind the dome)
 // ============================================================
-void setClearColor(bool isNight)
+void setNightAmount(float nightAmount)
 {
-    gNight = isNight;
-
-    if (isNight) {
-        glClearColor(0.05f, 0.07f, 0.17f, 1.0f);
-    } else {
-        glClearColor(0.62f, 0.80f, 0.96f, 1.0f);
-    }
+    gNightAmount = fmaxf(0.0f, fminf(1.0f, nightAmount));
+    glClearColor(
+        DayNightSettings::DayClear[0] +
+            (DayNightSettings::NightClear[0] - DayNightSettings::DayClear[0]) * gNightAmount,
+        DayNightSettings::DayClear[1] +
+            (DayNightSettings::NightClear[1] - DayNightSettings::DayClear[1]) * gNightAmount,
+        DayNightSettings::DayClear[2] +
+            (DayNightSettings::NightClear[2] - DayNightSettings::DayClear[2]) * gNightAmount,
+        1.0f);
 }
 
 } // namespace Sky

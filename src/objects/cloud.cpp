@@ -1,10 +1,10 @@
 #include "objects/cloud.h"
 
+#include "DayNightSettings.h"
 #include "graphics/Primitives.h"
 
 #include <GLFW/glfw3.h>
 #include <cmath>
-#include <cstdio>
 
 namespace Cloud {
 
@@ -13,34 +13,31 @@ namespace Cloud {
 // ============================================================
 namespace {
 
-void setCloudMaterial(float r, float g, float b)
+float gNightAmount = 0.0f;
+
+void setCloudColor(float r, float g, float b)
 {
-    GLfloat diff[4] = { r, g, b, 1.0f };
-    GLfloat amb[4]  = { r, g, b, 1.0f };
-    GLfloat spec[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-    GLfloat emis[4] = { r, g, b, 1.0f };
-
-    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT,  amb);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE,  diff);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emis);
-
     glColor3f(r, g, b);
 }
 
-} // anonymous namespace
-
-
-// ============================================================
-//  Single cloud
-// ============================================================
-void drawCloud(float x, float y, float z, float scale)
+void drawCloudModel(bool lowDetail)
 {
-    glPushMatrix();
-    glTranslatef(x, y, z);
-    glScalef(scale, scale, scale);
+    if (lowDetail)
+    {
+        const float puffs[][4] = {
+            {-1.2f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.25f, 0.1f, 1.35f},
+            {1.25f, 0.05f, 0.0f, 1.05f}, {-0.35f, 0.85f, 0.0f, 0.9f},
+            {0.65f, 0.75f, 0.0f, 0.8f}};
+        for (const auto& puff : puffs)
+        {
+            glPushMatrix();
+            glTranslatef(puff[0], puff[1], puff[2]);
+            Primitives::drawSphere(puff[3], 7, 4);
+            glPopMatrix();
+        }
+        return;
+    }
 
-    setCloudMaterial(0.85f, 0.89f, 0.95f);
     {
         glPushMatrix(); glTranslatef(-1.30f, -0.25f, 0.00f);
             Primitives::drawSphere(0.90f, 10, 6); glPopMatrix();
@@ -52,7 +49,6 @@ void drawCloud(float x, float y, float z, float scale)
             Primitives::drawSphere(0.80f, 10, 6); glPopMatrix();
     }
 
-    setCloudMaterial(0.94f, 0.96f, 0.99f);
     {
         glPushMatrix(); glTranslatef(-1.10f, 0.15f, 0.00f);
             Primitives::drawSphere(1.05f, 12, 8); glPopMatrix();
@@ -64,7 +60,6 @@ void drawCloud(float x, float y, float z, float scale)
             Primitives::drawSphere(0.70f, 10, 6); glPopMatrix();
     }
 
-    setCloudMaterial(1.00f, 1.00f, 1.00f);
     {
         glPushMatrix(); glTranslatef(-0.55f, 0.75f, 0.05f);
             Primitives::drawSphere(0.85f, 12, 8); glPopMatrix();
@@ -74,7 +69,6 @@ void drawCloud(float x, float y, float z, float scale)
             Primitives::drawSphere(0.70f, 10, 6); glPopMatrix();
     }
 
-    setCloudMaterial(0.92f, 0.95f, 0.98f);
     {
         glPushMatrix(); glTranslatef(-1.75f, 0.05f, 0.00f);
             Primitives::drawSphere(0.75f, 10, 6); glPopMatrix();
@@ -82,6 +76,108 @@ void drawCloud(float x, float y, float z, float scale)
             Primitives::drawSphere(0.55f, 8, 5); glPopMatrix();
     }
 
+}
+
+GLuint cloudDisplayList(bool lowDetail)
+{
+    static GLuint detailedList = 0;
+    static GLuint simpleList = 0;
+    GLuint& list = lowDetail ? simpleList : detailedList;
+    if (list == 0)
+    {
+        list = glGenLists(1);
+        if (list != 0)
+        {
+            glNewList(list, GL_COMPILE);
+            drawCloudModel(lowDetail);
+            glEndList();
+        }
+    }
+    return list;
+}
+
+struct Frustum
+{
+    float planes[6][4]{};
+    float eyeX = 0.0f;
+    float eyeZ = 0.0f;
+    bool valid = false;
+};
+
+Frustum currentFrustum()
+{
+    GLfloat projection[16];
+    GLfloat modelview[16];
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
+
+    float clip[16];
+    for (int column = 0; column < 4; ++column)
+        for (int row = 0; row < 4; ++row)
+        {
+            clip[column * 4 + row] = 0.0f;
+            for (int k = 0; k < 4; ++k)
+                clip[column * 4 + row] +=
+                    projection[k * 4 + row] * modelview[column * 4 + k];
+        }
+
+    Frustum frustum;
+    frustum.eyeX = -(modelview[0] * modelview[12]
+        + modelview[1] * modelview[13] + modelview[2] * modelview[14]);
+    frustum.eyeZ = -(modelview[8] * modelview[12]
+        + modelview[9] * modelview[13] + modelview[10] * modelview[14]);
+    const int rows[3] = {0, 1, 2};
+    for (int axis = 0; axis < 3; ++axis)
+        for (int side = 0; side < 2; ++side)
+        {
+            const float sign = side == 0 ? 1.0f : -1.0f;
+            float* plane = frustum.planes[axis * 2 + side];
+            for (int component = 0; component < 4; ++component)
+                plane[component] = clip[component * 4 + 3]
+                    + sign * clip[component * 4 + rows[axis]];
+            const float length = std::sqrt(
+                plane[0] * plane[0] + plane[1] * plane[1]
+                + plane[2] * plane[2]);
+            if (length <= 1e-6f)
+                return frustum;
+            for (float& component : frustum.planes[axis * 2 + side])
+                component /= length;
+        }
+    frustum.valid = true;
+    return frustum;
+}
+
+bool visible(const Frustum& frustum, float x, float y, float z, float radius)
+{
+    if (!frustum.valid)
+        return true;
+    for (const auto& plane : frustum.planes)
+        if (plane[0] * x + plane[1] * y + plane[2] * z + plane[3] < -radius)
+            return false;
+    return true;
+}
+
+} // anonymous namespace
+
+
+// ============================================================
+//  Single cloud
+// ============================================================
+void drawCloud(float x, float y, float z, float scale)
+{
+    setCloudColor(
+        DayNightSettings::DayCloud[0] +
+            (DayNightSettings::NightCloud[0] - DayNightSettings::DayCloud[0]) * gNightAmount,
+        DayNightSettings::DayCloud[1] +
+            (DayNightSettings::NightCloud[1] - DayNightSettings::DayCloud[1]) * gNightAmount,
+        DayNightSettings::DayCloud[2] +
+            (DayNightSettings::NightCloud[2] - DayNightSettings::DayCloud[2]) * gNightAmount);
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glScalef(scale, scale, scale);
+    const GLuint list = cloudDisplayList(false);
+    if (list != 0) glCallList(list);
+    else drawCloudModel(false);
     glPopMatrix();
 }
 
@@ -101,7 +197,7 @@ void drawCloud(float x, float y, float z, float scale)
 
 namespace {
 
-constexpr int   kMaxClouds   = 72;
+constexpr int   kMaxClouds   = 96;
 constexpr float kMinRadius   =  25.0f;    // don't spawn on top of camera
 constexpr float kMaxRadius   =  300.0f;    // cover the complete visible horizon
 constexpr float kYMin        =  18.0f;
@@ -112,6 +208,7 @@ struct CloudInstance {
     float scale;
     float dirX, dirZ;
     float speed;
+    bool lowDetail;
 };
 
 CloudInstance g_clouds[kMaxClouds];
@@ -136,30 +233,29 @@ void randomDiscPoint(unsigned int seed, float& x, float& z)
     float angle = rand01(seed) * 6.2831853f;
 
     // sqrt distribution so points don't cluster at center
-    float u = rand01(seed + 1);
-    float r = kMinRadius + sqrtf(u) * (kMaxRadius - kMinRadius);
+    const float u = rand01(seed + 1);
+    const float r = sqrtf(
+        kMinRadius * kMinRadius
+        + u * (kMaxRadius * kMaxRadius - kMinRadius * kMinRadius));
 
     x = cosf(angle) * r;
     z = sinf(angle) * r;
-}
-
-// Random horizontal unit direction
-void randomDirection(unsigned int seed, float& dx, float& dz)
-{
-    float ang = rand01(seed) * 6.2831853f;
-    dx = cosf(ang);
-    dz = sinf(ang);
 }
 
 // Place one cloud at a random valid position
 void respawnCloud(CloudInstance& c, unsigned int seed)
 {
     randomDiscPoint(seed, c.x, c.z);
-    randomDirection(seed + 2, c.dirX, c.dirZ);
+    // A shared prevailing wind looks like a weather system; the small angle
+    // variation prevents the field from moving as one rigid layer.
+    const float direction = -0.10f + rand01(seed + 2) * 0.20f;
+    c.dirX = std::cos(direction);
+    c.dirZ = std::sin(direction);
 
     c.y     = kYMin + rand01(seed + 3) * (kYMax - kYMin);
-    c.scale =  2.2f + rand01(seed + 4) * 2.8f;
-    c.speed =  0.5f + rand01(seed + 5) * 1.2f;
+    c.scale =  1.7f + rand01(seed + 4) * 3.3f;
+    c.speed =  0.35f + rand01(seed + 5) * 0.85f;
+    c.lowDetail = c.scale < 2.8f || rand01(seed + 6) < 0.45f;
 }
 
 } // anonymous namespace
@@ -217,32 +313,57 @@ void updateField(float dt)
 
             unsigned int s = (unsigned int)(i * 7919 + 137);
             c.y     = kYMin + rand01(s) * (kYMax - kYMin);
-            c.scale =  2.2f + rand01(s + 1) * 2.8f;
-            c.speed =  0.5f + rand01(s + 2) * 1.2f;
-            // keep same direction so it keeps drifting outward
+            c.scale = 1.7f + rand01(s + 1) * 3.3f;
+            c.speed = 0.35f + rand01(s + 2) * 0.85f;
+            c.lowDetail = c.scale < 2.8f || rand01(s + 3) < 0.45f;
+            // Keep the prevailing direction so motion stays coherent.
         }
     }
+}
+
+void setNightAmount(float nightAmount)
+{
+    gNightAmount = std::fmax(0.0f, std::fmin(1.0f, nightAmount));
 }
 
 
 void drawField()
 {
-    GLboolean lightingWasOn = glIsEnabled(GL_LIGHTING);
-    GLboolean colorMatWasOn = glIsEnabled(GL_COLOR_MATERIAL);
-
+    glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_LIGHTING_BIT);
     glDisable(GL_LIGHTING);
     glDisable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glDisable(GL_TEXTURE_2D);
+    setCloudColor(
+        DayNightSettings::DayCloud[0] +
+            (DayNightSettings::NightCloud[0] - DayNightSettings::DayCloud[0]) * gNightAmount,
+        DayNightSettings::DayCloud[1] +
+            (DayNightSettings::NightCloud[1] - DayNightSettings::DayCloud[1]) * gNightAmount,
+        DayNightSettings::DayCloud[2] +
+            (DayNightSettings::NightCloud[2] - DayNightSettings::DayCloud[2]) * gNightAmount);
+
+    const Frustum frustum = currentFrustum();
+    const GLuint detailedList = cloudDisplayList(false);
+    const GLuint simpleList = cloudDisplayList(true);
 
     for (int i = 0; i < kMaxClouds; ++i) {
-        drawCloud(g_clouds[i].x,
-                  g_clouds[i].y,
-                  g_clouds[i].z,
-                  g_clouds[i].scale);
-    }
+        const CloudInstance& cloud = g_clouds[i];
+        constexpr float repeat = kMaxRadius * 2.0f;
+        const float drawX = cloud.x
+            + std::round((frustum.eyeX - cloud.x) / repeat) * repeat;
+        const float drawZ = cloud.z
+            + std::round((frustum.eyeZ - cloud.z) / repeat) * repeat;
+        if (!visible(frustum, drawX, cloud.y, drawZ, cloud.scale * 3.1f))
+            continue;
 
-    if (colorMatWasOn) glEnable(GL_COLOR_MATERIAL);
-    if (lightingWasOn) glEnable(GL_LIGHTING);
+        glPushMatrix();
+        glTranslatef(drawX, cloud.y, drawZ);
+        glScalef(cloud.scale, cloud.scale, cloud.scale);
+        const GLuint list = cloud.lowDetail ? simpleList : detailedList;
+        if (list != 0) glCallList(list);
+        else drawCloudModel(cloud.lowDetail);
+        glPopMatrix();
+    }
+    glPopAttrib();
 }
 
 } // namespace Cloud

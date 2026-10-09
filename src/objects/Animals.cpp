@@ -192,10 +192,12 @@ void drawHead(float bob, float chew, float graze)
     // Forelock tuft
     drawEllipsoid(kPatchAlt, {0.0f, 1.45f, -2.38f}, {0.24f, 0.12f, 0.20f}, -20.0f, 0, 0, 10, 8);
 
-    // Grass hanging from the mouth
-    for (float s : {-1.0f, 0.0f, 1.0f})
-        drawBox(kGrass, {0.06f * s, 0.42f, -3.22f}, {0.03f, 0.30f, 0.02f},
-                graze * 0.5f, 0.0f, 12.0f * s);
+    // Grass only hangs from the mouth while the cow is actually grazing.
+    if (graze > 0.35f)
+        for (float s : {-1.0f, 0.0f, 1.0f})
+            drawBox(kGrass, {0.06f * s, 0.42f, -3.22f},
+                    {0.03f, 0.22f + 0.10f * graze, 0.02f},
+                    std::sin(graze * 4.0f) * 5.0f, 0.0f, 12.0f * s);
 
     glPopMatrix();
 }
@@ -442,14 +444,18 @@ void drawChickenModel(const Plumage& p, bool rooster, const ChickenPose& k)
 
 } // namespace
 
-void drawCow(float x, float z, float scale, float rotation)
+void drawCow(float x, float z, float scale, float rotation, float animationTime)
 {
-    const float t        = static_cast<float>(glfwGetTime());
+    const float t        = animationTime;
+    const float grazeWave = 0.5f + 0.5f * std::sin(
+        t * 0.42f + x * 0.31f + z * 0.17f);
+    const float grazing = clamp01((grazeWave - 0.20f) / 0.42f);
     const float tailSway = 12.0f * std::sin(t * 1.6f);
     const float earFlick = 6.0f  * std::sin(t * 3.1f);
-    const float headBob  = 0.03f * std::sin(t * 0.9f);
+    const float headBob  = 0.03f * std::sin(t * 0.9f)
+        + (1.0f - grazing) * 0.58f;
     const float breath   = 1.0f + 0.012f * std::sin(t * 1.3f);
-    const float chew     = 5.0f  * std::sin(t * 4.5f);
+    const float chew     = grazing * 5.0f * std::sin(t * 4.5f);
 
     glPushMatrix();
     glTranslatef(x, 0.0f, z);
@@ -483,11 +489,18 @@ void drawCow(float x, float z, float scale, float rotation)
     drawEllipsoid(kPatch,    {0.20f, 2.58f, 0.30f}, {0.42f, 0.12f, 0.50f});                    // back
 
     // --- Head, ears, horns ---
-    drawHead(headBob, chew, tailSway);
+    // A small grazed patch makes the feeding action readable at a distance.
+    for (int blade = -2; blade <= 2; ++blade)
+        drawBox(kGrass, {blade * 0.18f, 0.16f, -3.05f + 0.08f * (blade & 1)},
+                {0.035f, 0.32f, 0.035f}, blade * 8.0f, 0.0f, blade * 4.0f);
+    drawHead(headBob, chew, grazing);
+    glPushMatrix();
+    glTranslatef(0.0f, headBob, 0.0f);
     drawEar(-1.0f,  earFlick);
     drawEar( 1.0f, -earFlick);
     drawHorn(-1.0f);
     drawHorn( 1.0f);
+    glPopMatrix();
 
     // --- Legs ---
     drawLeg(-0.62f, -1.10f, false);
@@ -502,9 +515,10 @@ void drawCow(float x, float z, float scale, float rotation)
     glPopMatrix();
 }
 
-void drawChicken(float x, float z, float scale, float rotation, bool rooster)
+void drawChicken(float x, float z, float scale, float rotation,
+                 float animationTime, bool rooster)
 {
-    const float t    = static_cast<float>(glfwGetTime());
+    const float t    = animationTime;
     const float seed = x * 0.37f + z * 0.19f;
 
     // Wander on a circle, speeding up and slowing down; legs are driven by

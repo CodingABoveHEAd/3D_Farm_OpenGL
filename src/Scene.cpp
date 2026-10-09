@@ -1,8 +1,11 @@
 #include "Scene.h"
 
+#include "DayNightSettings.h"
 #include "Input.h"
 #include "graphics/Primitives.h"
 #include "objects/Vegetation.h"
+#include "objects/Birds.h"
+#include "objects/Village.h"
 
 #include <GLFW/glfw3.h>
 #include <algorithm>
@@ -52,8 +55,8 @@ constexpr float kTreeCullMargin    = 18.0f;
 // as designed. If the frame rate is still too low on a CPU-only machine, try
 // something like 350 for trees and 400 for farms: far objects are skipped
 // entirely. Leave both at 0 to change nothing visually.
-constexpr float kTreeMaxDistance = 0.0f;
-constexpr float kFarmMaxDistance = 0.0f;
+constexpr float kTreeMaxDistance = 225.0f;
+constexpr float kFarmMaxDistance = 360.0f;
 
 // ---------------------------------------------------------------------------
 // View frustum culling
@@ -241,7 +244,8 @@ struct TreeInstance
 struct TreeChunk
 {
     std::vector<TreeInstance> trees;
-    GLuint list = 0;
+    GLuint detailedList = 0;
+    GLuint simpleList = 0;
     float centerX = 0.0f;
     float centerY = 0.0f;
     float centerZ = 0.0f;
@@ -424,11 +428,48 @@ void buildTreeChunks()
     }
 }
 
-void drawTreeChunk(const TreeChunk& chunk)
+void drawSimpleTree(const TreeInstance& tree)
+{
+    glPushMatrix();
+    glTranslatef(tree.x, 0.0f, tree.z);
+    glScalef(tree.size, tree.size, tree.size);
+
+    glColor3f(0.30f, 0.16f, 0.07f);
+    glPushMatrix();
+    glTranslatef(0.0f, 1.6f, 0.0f);
+    Primitives::drawCube(0.55f, 3.2f, 0.55f);
+    glPopMatrix();
+
+    // Three low-poly crowns retain the silhouette and layered greens of the
+    // detailed tree while using a small fraction of its vertices.
+    const float crowns[][5] = {
+        {-0.72f, 3.75f, 0.0f, 1.25f, 0.31f},
+        { 0.72f, 3.82f, 0.0f, 1.20f, 0.38f},
+        { 0.00f, 4.65f, 0.0f, 1.45f, 0.44f}};
+    for (const auto& crown : crowns)
+    {
+        glColor3f(0.12f, crown[4], 0.10f);
+        glPushMatrix();
+        glTranslatef(crown[0], crown[1], crown[2]);
+        glScalef(1.0f, 0.82f, 1.0f);
+        Primitives::drawSphere(crown[3], 5, 3);
+        glPopMatrix();
+    }
+    glPopMatrix();
+}
+
+void drawTreeChunk(const TreeChunk& chunk, bool simplified)
 {
     for (const TreeInstance& tree : chunk.trees)
     {
-        Vegetation::drawTree(tree.x, tree.z, tree.size);
+        if (simplified)
+        {
+            drawSimpleTree(tree);
+        }
+        else
+        {
+            Vegetation::drawTree(tree.x, tree.z, tree.size);
+        }
     }
 }
 
@@ -521,7 +562,15 @@ void Scene::handleInput()
 
 void Scene::update(float deltaTime)
 {
+    lighting_.update(deltaTime);
+    Cloud::setNightAmount(lighting_.nightAmount());
+    tractor_.setNightAmount(lighting_.nightAmount());
     animation_.update(deltaTime);
+    if (animation_.isPaused())
+    {
+        return;
+    }
+
     tractor_.update(deltaTime);
     for (std::size_t index = 0; index < farmers_.size(); ++index)
     {
@@ -569,7 +618,8 @@ void Scene::update(float deltaTime)
 
         if (tractorTrafficActive_[index])
         {
-            tractor_.updateRoad(deltaTime, roadTractorZ_[index]);
+            tractor_.updateRoad(
+                deltaTime, roadTractorZ_[index], roadTractorWheelRotation_[index]);
         }
     }
     Cloud::updateField(deltaTime);
@@ -603,15 +653,11 @@ void Scene::render() const
     // Ground and road use their original flat colors; apply material lighting
     // to the three-dimensional world objects that follow.
     lighting_.apply();
+    applyNightLights();
 
-    // Defensive reset of fixed-function state that earlier draws (the sun
-    // and clouds are drawn at the END of every frame) can leave behind and
-    // that would otherwise carry into the next frame's lit objects:
-    //  - a leftover white EMISSION material turns every lit surface flat white
-    //  - a leftover texture makes surfaces sample a glow texture
-    //  - normals must be renormalised because the scene uses glScalef
-    const GLfloat noEmission[] = {0.0f, 0.0f, 0.0f, 1.0f};
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEmission);
+    // Establish a predictable fixed-function state before drawing lit
+    // geometry. Lighting::apply owns material defaults; clouds and sky now
+    // preserve their state instead of leaking it into the next frame.
     glDisable(GL_TEXTURE_2D);
     glEnable(GL_NORMALIZE);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
@@ -622,9 +668,13 @@ void Scene::render() const
     PowerSubstation::drawRoadUtilities(animation_.waterTime());
     renderScatteredTrees();
     renderPonds();
+    Village::drawPondSeating(animation_.waterTime());
+    Village::drawRoadsideAmenities(
+        animation_.waterTime(), lighting_.nightAmount());
     renderFarmers();
     renderRoadTractors();
     renderBarns();
+    renderNightFixtures();
     renderCropWorkers();
     // Keep the full substation visible beside the central road, just beyond
     // the roadside utility poles and outside the traffic lane.
@@ -648,9 +698,225 @@ void Scene::render() const
         }
     }
 
-    Sky::drawSun();
+    // The terrain and road deliberately use large unlit display-list quads.
+    // Lightweight projected pools make local lamps visible there without
+    // tessellating the whole world or consuming more hardware light slots.
+    renderNightLightPools();
     Cloud::drawField();
     // renderTransformationMarker();
+}
+
+void Scene::applyNightLights() const
+{
+    std::array<Lighting::LocalLight, 32> lights{};
+    std::size_t count = 0;
+    const auto addPoint = [&](float x, float y, float z,
+                              const float color[3], float linear, float quadratic)
+    {
+        if (count >= lights.size()) return;
+        Lighting::LocalLight& light = lights[count++];
+        light.position[0] = x; light.position[1] = y; light.position[2] = z;
+        for (int component = 0; component < 3; ++component)
+            light.color[component] = color[component];
+        light.linearAttenuation = linear;
+        light.quadraticAttenuation = quadratic;
+    };
+
+    const float nearestPoleZ = std::round(gEye[2] / 24.0f) * 24.0f;
+    for (int row = -1; row <= 1; ++row)
+    {
+        const float z = nearestPoleZ + static_cast<float>(row) * 24.0f;
+        addPoint(-5.2f, 8.37f, z, DayNightSettings::WarmLamp, 0.035f, 0.006f);
+        addPoint( 5.2f, 8.37f, z, DayNightSettings::WarmLamp, 0.035f, 0.006f);
+    }
+
+    // Tea-shop bulbs. These join the same nearest-light ranking as houses and
+    // street lamps, so the fixed-function hardware limit is never exceeded.
+    addPoint(-12.35f, 2.75f, -32.0f, DayNightSettings::WarmLamp, 0.050f, 0.012f);
+    addPoint( 12.35f, 2.75f,  18.0f, DayNightSettings::WarmLamp, 0.050f, 0.012f);
+    addPoint(-12.35f, 2.75f,  66.0f, DayNightSettings::WarmLamp, 0.050f, 0.012f);
+
+    struct BarnLight { float x, z, scale, rotation; };
+    constexpr BarnLight barnLights[] = {
+        {-65.0f, -68.0f, 1.02f, -4.0f}, {65.0f, -34.0f, 0.96f, 5.0f},
+        {-65.0f,  34.0f, 1.08f, -2.0f}, {65.0f,  68.0f, 1.00f, 7.0f}};
+    for (const BarnLight& barn : barnLights)
+    {
+        const float angle = barn.rotation * 3.14159265358979323846f / 180.0f;
+        const float localZ = -4.35f * barn.scale;
+        addPoint(barn.x + std::sin(angle) * localZ, 4.55f * barn.scale,
+                 barn.z + std::cos(angle) * localZ,
+                 DayNightSettings::WarmLamp, 0.055f, 0.012f);
+    }
+
+    constexpr float farmScale = 0.78f;
+    for (int row = -2; row <= 3; ++row)
+    {
+        for (int side = 0; side < 2; ++side)
+        {
+            const int index = (row + 2) * 2 + side;
+            const FarmLayout& layout = farmLayouts_[index];
+            const float angle = layout.rotation * 3.14159265358979323846f / 180.0f;
+            const float lx = (layout.houseOffsetX + 10.0f) * farmScale;
+            const float lz = (layout.houseOffsetZ + 12.72f) * farmScale;
+            const float centerX = side == 0 ? -38.0f : 38.0f;
+            const float centerZ = static_cast<float>(row) * 34.0f;
+            addPoint(centerX + std::cos(angle) * lx + std::sin(angle) * lz,
+                     4.45f * farmScale,
+                     centerZ - std::sin(angle) * lx + std::cos(angle) * lz,
+                     DayNightSettings::WarmLamp, 0.060f, 0.014f);
+        }
+    }
+
+    std::size_t nearestTractor = roadTractorZ_.size();
+    float nearestDistance = 1e30f;
+    for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
+    {
+        if (!tractorTrafficActive_[index]) continue;
+        const float dz = roadTractorZ_[index] - gEye[2];
+        const float distance = dz * dz + gEye[0] * gEye[0];
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearestTractor = index;
+        }
+    }
+    if (nearestTractor < roadTractorZ_.size())
+    {
+        for (float x : {-0.95f, 0.95f})
+        {
+            Lighting::LocalLight& light = lights[count++];
+            light.position[0] = x; light.position[1] = 2.80f;
+            light.position[2] = roadTractorZ_[nearestTractor] + 2.45f;
+            for (int component = 0; component < 3; ++component)
+                light.color[component] = DayNightSettings::Headlight[component];
+            light.direction[0] = 0.0f; light.direction[1] = -0.08f;
+            light.direction[2] = 1.0f;
+            light.cutoff = 28.0f;
+            light.exponent = 14.0f;
+            light.linearAttenuation = 0.025f;
+            light.quadraticAttenuation = 0.004f;
+            light.priority = true;
+        }
+    }
+
+    lighting_.applyLocalLights(lights.data(), count, gEye[0], gEye[1], gEye[2]);
+}
+
+void Scene::drawNightBulb(float x, float y, float z, float scale) const
+{
+    const float night = lighting_.nightAmount();
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glScalef(scale, scale, scale);
+    glColor3f(0.12f, 0.10f, 0.07f);
+    glPushMatrix();
+    glTranslatef(0.0f, 0.18f, 0.0f);
+    Primitives::drawCube(0.42f, 0.18f, 0.42f);
+    glPopMatrix();
+
+    glPushAttrib(GL_LIGHTING_BIT | GL_CURRENT_BIT | GL_ENABLE_BIT);
+    const GLfloat emission[] = {
+        DayNightSettings::WarmLamp[0] * night,
+        DayNightSettings::WarmLamp[1] * night,
+        DayNightSettings::WarmLamp[2] * night, 1.0f};
+    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+    glColor3f(0.45f + 0.55f * night, 0.38f + 0.42f * night,
+              0.22f + 0.18f * night);
+    Primitives::drawSphere(0.18f, 10, 7);
+    glPopAttrib();
+    glPopMatrix();
+}
+
+void Scene::renderNightFixtures() const
+{
+    struct BarnLight { float x, z, scale, rotation; };
+    constexpr BarnLight barnLights[] = {
+        {-65.0f, -68.0f, 1.02f, -4.0f}, {65.0f, -34.0f, 0.96f, 5.0f},
+        {-65.0f,  34.0f, 1.08f, -2.0f}, {65.0f,  68.0f, 1.00f, 7.0f}};
+    for (const BarnLight& barn : barnLights)
+    {
+        const float angle = barn.rotation * 3.14159265358979323846f / 180.0f;
+        const float localZ = -4.35f * barn.scale;
+        drawNightBulb(barn.x + std::sin(angle) * localZ, 4.55f * barn.scale,
+                      barn.z + std::cos(angle) * localZ, 1.0f);
+    }
+}
+
+void Scene::renderNightLightPools() const
+{
+    const float night = lighting_.nightAmount();
+    if (night < 0.01f)
+    {
+        return;
+    }
+
+    glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT | GL_CURRENT_BIT |
+                 GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+
+    const auto drawPool = [night](float x, float z, float radius, float alpha)
+    {
+        constexpr int segments = 16;
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4f(DayNightSettings::WarmLamp[0],
+                  DayNightSettings::WarmLamp[1] * 0.86f,
+                  DayNightSettings::WarmLamp[2] * 0.55f, alpha * night);
+        glVertex3f(x, 0.10f, z);
+        glColor4f(DayNightSettings::WarmLamp[0],
+                  DayNightSettings::WarmLamp[1],
+                  DayNightSettings::WarmLamp[2], 0.0f);
+        for (int segment = 0; segment <= segments; ++segment)
+        {
+            const float angle = static_cast<float>(segment) *
+                2.0f * 3.14159265358979323846f / static_cast<float>(segments);
+            glVertex3f(x + std::cos(angle) * radius, 0.10f,
+                       z + std::sin(angle) * radius);
+        }
+        glEnd();
+    };
+
+    const float nearestPoleZ = std::round(gEye[2] / 24.0f) * 24.0f;
+    for (int row = -2; row <= 2; ++row)
+    {
+        const float z = nearestPoleZ + static_cast<float>(row) * 24.0f;
+        drawPool(-5.2f, z, 7.0f, 0.14f);
+        drawPool( 5.2f, z, 7.0f, 0.14f);
+    }
+    drawPool(-12.35f, -32.0f, 5.0f, 0.12f);
+    drawPool( 12.35f,  18.0f, 5.0f, 0.12f);
+    drawPool(-12.35f,  66.0f, 5.0f, 0.12f);
+
+    for (std::size_t index = 0; index < roadTractorZ_.size(); ++index)
+    {
+        if (!tractorTrafficActive_[index]) continue;
+        const float z = roadTractorZ_[index];
+        const float dz = z - gEye[2];
+        if (dz * dz + gEye[0] * gEye[0] > 180.0f * 180.0f) continue;
+
+        const float nearZ = z + 2.55f;
+        const float farZ = z + 22.0f;
+        glBegin(GL_QUADS);
+        glColor4f(DayNightSettings::Headlight[0],
+                  DayNightSettings::Headlight[1],
+                  DayNightSettings::Headlight[2], 0.20f * night);
+        glVertex3f(-1.45f, 0.12f, nearZ);
+        glVertex3f( 1.45f, 0.12f, nearZ);
+        glColor4f(DayNightSettings::Headlight[0],
+                  DayNightSettings::Headlight[1],
+                  DayNightSettings::Headlight[2], 0.0f);
+        glVertex3f( 4.2f, 0.12f, farZ);
+        glVertex3f(-4.2f, 0.12f, farZ);
+        glEnd();
+    }
+
+    glDepthMask(GL_TRUE);
+    glPopAttrib();
 }
 
 void Scene::renderBarns() const
@@ -732,11 +998,17 @@ void Scene::renderScatteredTrees() const
 
         if (kCacheVegetation)
         {
-            cachedList(chunk.list, [&chunk]() { drawTreeChunk(chunk); });
+            const float dx = chunk.centerX - gEye[0];
+            const float dz = chunk.centerZ - gEye[2];
+            const bool simplified = dx * dx + dz * dz > 70.0f * 70.0f;
+            GLuint& list = simplified ? chunk.simpleList : chunk.detailedList;
+            cachedList(list, [&chunk, simplified]() {
+                drawTreeChunk(chunk, simplified);
+            });
         }
         else
         {
-            drawTreeChunk(chunk);
+            drawTreeChunk(chunk, false);
         }
     }
 }
@@ -746,15 +1018,15 @@ void Scene::renderPonds() const
     // Keep the enlarged farms and ponds separated from the central road.
     if (sphereVisible(-72.0f, 0.0f, -42.0f, 30.0f))
     {
-        Pond::draw(-72.0f, -42.0f, 23.0f, 16.0f, animation_.waterTime(),        false);
+        Pond::draw(-72.0f, -42.0f, 27.0f, 19.0f, animation_.waterTime(),        false);
     }
     if (sphereVisible(73.0f, 0.0f, 24.0f, 32.0f))
     {
-        Pond::draw( 73.0f,  24.0f, 25.0f, 17.0f, animation_.waterTime() + 1.4f, true);
+        Pond::draw( 73.0f,  24.0f, 29.0f, 20.0f, animation_.waterTime() + 1.4f, true);
     }
     if (sphereVisible(-71.0f, 0.0f, 58.0f, 28.0f))
     {
-        Pond::draw(-71.0f,  58.0f, 21.0f, 15.0f, animation_.waterTime() + 2.8f, false);
+        Pond::draw(-71.0f,  58.0f, 25.0f, 18.0f, animation_.waterTime() + 2.8f, false);
     }
 }
 
@@ -779,7 +1051,8 @@ void Scene::renderRoadTractors() const
         if (tractorTrafficActive_[index]
             && sphereVisible(0.0f, 2.0f, roadTractorZ_[index], 14.0f))
         {
-            tractor_.drawRoadTractor(roadTractorZ_[index], colors[index]);
+            tractor_.drawRoadTractor(
+                roadTractorZ_[index], roadTractorWheelRotation_[index], colors[index]);
         }
     }
 }
@@ -873,6 +1146,11 @@ void Scene::renderFarm(
     const auto drawRocks = [&]()
     {
         renderRocks();
+        Village::drawFarmGrass(
+            static_cast<int>(farmIndex) + 1,
+            layout.cropOffsetX, layout.cropOffsetZ,
+            layout.houseOffsetX, layout.houseOffsetZ,
+            layout.hasWindmill);
     };
 
     if (cacheable && kCacheVegetation)
@@ -891,7 +1169,8 @@ void Scene::renderFarm(
     {
         Animals::drawCow(
             animalPositions[animal][0], animalPositions[animal][1],
-            animalPositions[animal][2], animalPositions[animal][3]);
+            animalPositions[animal][2], animalPositions[animal][3],
+            animation_.waterTime());
     }
 
     const float chickenPositions[3][4] = {
@@ -902,7 +1181,8 @@ void Scene::renderFarm(
     {
         Animals::drawChicken(
             chickenPositions[chicken][0], chickenPositions[chicken][1],
-            chickenPositions[chicken][2], chickenPositions[chicken][3]);
+            chickenPositions[chicken][2], chickenPositions[chicken][3],
+            animation_.waterTime());
     }
 
     if (cacheable)
@@ -918,6 +1198,11 @@ void Scene::renderFarm(
     glTranslatef(layout.houseOffsetX, 0.0f, layout.houseOffsetZ);
     farmhouse_.render();
     glPopMatrix();
+    drawNightBulb(
+        layout.houseOffsetX + 10.0f,
+        4.45f,
+        layout.houseOffsetZ + 12.72f,
+        0.80f);
 
     if (layout.hasTractor)
     {
@@ -926,7 +1211,7 @@ void Scene::renderFarm(
     if (layout.hasWindmill)
     {
         Windmill::drawWindmill(
-            -14.0f, 1.0f, animation_.windmillAngle(), 1.15f);
+            -14.0f, 1.0f, animation_.windmillAngle(), 1.48f);
     }
 
     if (cacheable)
@@ -991,9 +1276,9 @@ void Scene::renderTrees() const
 void Scene::renderAnimals() const
 {
     // Place cows in open pasture areas, away from the crop rows and buildings.
-    Animals::drawCow(-16.0f, -2.0f, 1.05f, 8.0f);
-    Animals::drawCow(16.0f, -7.0f, 0.90f, -18.0f);
-    Animals::drawCow(-15.0f, 14.0f, 0.82f, 28.0f);
+    Animals::drawCow(-16.0f, -2.0f, 1.05f, 8.0f, animation_.waterTime());
+    Animals::drawCow(16.0f, -7.0f, 0.90f, -18.0f, animation_.waterTime());
+    Animals::drawCow(-15.0f, 14.0f, 0.82f, 28.0f, animation_.waterTime());
 }
 
 void Scene::renderBoundary() const
@@ -1115,4 +1400,15 @@ void Scene::renderTransformationMarker() const
 bool Scene::isNight() const
 {
     return lighting_.isNight();
+}
+
+float Scene::nightAmount() const
+{
+    return lighting_.nightAmount();
+}
+
+void Scene::renderSky() const
+{
+    Sky::drawSun(animation_.waterTime());
+    Birds::draw(animation_.waterTime(), lighting_.nightAmount());
 }

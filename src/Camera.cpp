@@ -9,23 +9,14 @@
 namespace {
 constexpr float Pi = 3.14159265358979323846f;
 
-constexpr float MoveSpeed = 90.0f;          // units per second
+constexpr float MoveSpeed = 20.0f;          // units per second
 constexpr float SprintMultiplier = 3.0f;    // hold Left Shift
 constexpr float SlowMultiplier = 0.3f;      // hold Left Ctrl
 constexpr float MoveResponsiveness = 20.0f; // smooth acceleration and braking
 constexpr float LookResponsiveness = 24.0f; // smooth mouse/keyboard look
 constexpr float MouseSensitivity = 0.08f;   // degrees per pixel
 constexpr float KeyLookSpeed = 90.0f;       // degrees per second
-constexpr float MaxDeltaTime = 0.05f;       // ignore frame-time spikes
-
-bool initialized = false;
-bool cursorCaptured = false;
-bool prevLeftMouse = false;
-
-int windowedX = 100;
-int windowedY = 100;
-int windowedWidth = 1280;
-int windowedHeight = 720;
+constexpr float MaxDeltaTime = 0.25f;       // bound long focus/load-time spikes
 
 float clampPitch(float pitch)
 {
@@ -39,51 +30,24 @@ float wrapAngle(float angle)
     return angle;
 }
 
-void toggleFullscreen(GLFWwindow* window)
-{
-    if (glfwGetWindowMonitor(window) == nullptr)
-    {
-        glfwGetWindowPos(window, &windowedX, &windowedY);
-        glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
-
-        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-        glfwSetWindowMonitor(
-            window, monitor, 0, 0,
-            mode->width, mode->height, mode->refreshRate);
-    }
-    else
-    {
-        glfwSetWindowMonitor(
-            window, nullptr,
-            windowedX, windowedY,
-            windowedWidth, windowedHeight, 0);
-    }
-
-    glfwSwapInterval(0);
 }
 
-void setMouseLook(GLFWwindow* window, bool enabled)
+void Camera::setMouseLook(GLFWwindow* window, bool enabled)
 {
-    cursorCaptured = enabled;
+    if (!window)
+    {
+        return;
+    }
 
-    if (enabled)
+    cursorCaptured_ = enabled;
+    if (glfwRawMouseMotionSupported())
     {
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        if (glfwRawMouseMotionSupported())
-        {
-            glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
-        }
+        glfwSetInputMode(
+            window, GLFW_RAW_MOUSE_MOTION, enabled ? GLFW_TRUE : GLFW_FALSE);
     }
-    else
-    {
-        if (glfwRawMouseMotionSupported())
-        {
-            glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
-        }
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    }
-}
+    glfwSetInputMode(
+        window, GLFW_CURSOR, enabled ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    firstMouse_ = true;
 }
 
 void Camera::reset()
@@ -107,49 +71,38 @@ void Camera::update(GLFWwindow* window, float deltaTime)
 
     if (window != nullptr)
     {
-        if (!initialized)
+        if (!initialized_)
         {
-            glfwSwapInterval(0);
             setMouseLook(window, false);
-            initialized = true;
+            initialized_ = true;
         }
 
         // Lost focus (alt-tab etc.): release the mouse and stop moving
         if (!glfwGetWindowAttrib(window, GLFW_FOCUSED))
         {
-            if (cursorCaptured)
+            if (cursorCaptured_)
             {
                 setMouseLook(window, false);
             }
             velocity_[0] = velocity_[1] = velocity_[2] = 0.0f;
-            prevLeftMouse = false;
+            previousLeftMouse_ = false;
             return;
-        }
-
-        if (Input::wasPressed(GLFW_KEY_F11))
-        {
-            toggleFullscreen(window);
         }
 
         // Click the window to capture the mouse (like most games)
         const bool leftMouse =
             glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-        if (leftMouse && !prevLeftMouse && !cursorCaptured)
+        if (leftMouse && !previousLeftMouse_ && !cursorCaptured_)
         {
             setMouseLook(window, true);
-            firstMouse_ = true;
         }
-        prevLeftMouse = leftMouse;
+        previousLeftMouse_ = leftMouse;
 
-        // Esc releases the mouse; Tab toggles it
-        if (cursorCaptured && Input::wasPressed(GLFW_KEY_ESCAPE))
-        {
-            setMouseLook(window, false);
-        }
+        // Escape is handled by Application so one press releases the mouse
+        // and a second press closes the window.
         if (Input::wasPressed(GLFW_KEY_TAB))
         {
-            setMouseLook(window, !cursorCaptured);
-            firstMouse_ = true;
+            setMouseLook(window, !cursorCaptured_);
         }
     }
 
@@ -202,19 +155,24 @@ void Camera::update(GLFWwindow* window, float deltaTime)
     if (Input::isDown(GLFW_KEY_LEFT_CONTROL)) speed *= SlowMultiplier;
 
     // Ease toward target velocity (smooth start and stop)
-    const float blend = 1.0f - std::exp(-MoveResponsiveness * deltaTime);
-    velocity_[0] += (dirX * speed - velocity_[0]) * blend;
-    velocity_[1] += (dirY * speed - velocity_[1]) * blend;
-    velocity_[2] += (dirZ * speed - velocity_[2]) * blend;
+    const float decay = std::exp(-MoveResponsiveness * deltaTime);
+    const float targetVelocity[3] = {dirX * speed, dirY * speed, dirZ * speed};
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        const float oldVelocity = velocity_[axis];
+        // Exact integration of exponential acceleration for this frame. This
+        // keeps travel distance consistent at low and high frame rates.
+        position_[axis] += targetVelocity[axis] * deltaTime
+            + (oldVelocity - targetVelocity[axis])
+                * (1.0f - decay) / MoveResponsiveness;
+        velocity_[axis] = targetVelocity[axis]
+            + (oldVelocity - targetVelocity[axis]) * decay;
+    }
 
     for (float& v : velocity_)
     {
         if (std::fabs(v) < 0.001f) v = 0.0f;
     }
-
-    position_[0] += velocity_[0] * deltaTime;
-    position_[1] += velocity_[1] * deltaTime;
-    position_[2] += velocity_[2] * deltaTime;
 
     if (Input::wasPressed(GLFW_KEY_R))
     {
@@ -230,7 +188,7 @@ void Camera::onMouseMove(double xPosition, double yPosition)
     lastMouseY_ = yPosition;
 
     // Only look around while the mouse is captured
-    if (!cursorCaptured)
+    if (!cursorCaptured_)
     {
         firstMouse_ = true;
         return;
@@ -267,4 +225,24 @@ void Camera::applyView() const
     glRotatef(-pitch_, 1.0f, 0.0f, 0.0f);
     glRotatef(-yaw_ - 90.0f, 0.0f, 1.0f, 0.0f);
     glTranslatef(-position_[0], -position_[1], -position_[2]);
+}
+
+void Camera::setPose(float x, float y, float z, float yaw, float pitch)
+{
+    position_[0] = x;
+    position_[1] = y;
+    position_[2] = z;
+    yaw_ = wrapAngle(yaw);
+    pitch_ = clampPitch(pitch);
+    targetYaw_ = yaw_;
+    targetPitch_ = pitch_;
+    velocity_[0] = velocity_[1] = velocity_[2] = 0.0f;
+}
+
+void Camera::applySkyView() const
+{
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glRotatef(-pitch_, 1.0f, 0.0f, 0.0f);
+    glRotatef(-yaw_ - 90.0f, 0.0f, 1.0f, 0.0f);
 }

@@ -3,9 +3,9 @@
 namespace Sky {
 
 // Existing sun-drawing API (unchanged signature).
-void drawSun();
+void drawSun(float animationTime);
 
 // NEW — set the clear color each frame based on day/night.
-void setClearColor(bool isNight);
+void setNightAmount(float nightAmount);
 
 } // namespace Sky

@@ -3,6 +3,7 @@
 #include "graphics/Primitives.h"
 
 #include <GLFW/glfw3.h>
+#include <algorithm>
 #include <cmath>
 
 namespace Vegetation {
@@ -86,6 +87,7 @@ float sideShade(float a)
 void cylinderY(float r0, float r1, float h, int segs, const C& c,
                bool capTop = false)
 {
+    const float slope = h > 1e-5f ? (r0 - r1) / h : 0.0f;
     glBegin(GL_QUADS);
     for (int i = 0; i < segs; ++i) {
         float a0 = 2.0f * PI * i / segs;
@@ -93,12 +95,16 @@ void cylinderY(float r0, float r1, float h, int segs, const C& c,
         float k0 = sideShade(a0), k1 = sideShade(a1);
 
         col(c, k0 * 0.92f);
+        glNormal3f(sinf(a0), slope, cosf(a0));
         glVertex3f(r0 * sinf(a0), 0.0f, r0 * cosf(a0));
         col(c, k1 * 0.92f);
+        glNormal3f(sinf(a1), slope, cosf(a1));
         glVertex3f(r0 * sinf(a1), 0.0f, r0 * cosf(a1));
         col(c, k1 * 1.05f);
+        glNormal3f(sinf(a1), slope, cosf(a1));
         glVertex3f(r1 * sinf(a1), h,    r1 * cosf(a1));
         col(c, k0 * 1.05f);
+        glNormal3f(sinf(a0), slope, cosf(a0));
         glVertex3f(r1 * sinf(a0), h,    r1 * cosf(a0));
     }
     glEnd();
@@ -106,6 +112,7 @@ void cylinderY(float r0, float r1, float h, int segs, const C& c,
     if (capTop) {
         col(c, 1.10f);
         glBegin(GL_TRIANGLE_FAN);
+        glNormal3f(0.0f, 1.0f, 0.0f);
         glVertex3f(0.0f, h, 0.0f);
         for (int i = segs; i >= 0; --i) {
             float a = 2.0f * PI * i / segs;
@@ -178,6 +185,13 @@ void blob(float cx, float cy, float cz,
             int   ii[4] = {i, i + 1, i + 1, i};
             int   jj[4] = {j, j,     j + 1, j + 1};
             for (int v = 0; v < 4; ++v) {
+                const float th = PI * ii[v] / rings;
+                const float ph = 2.0f * PI * (jj[v] % slices) / slices;
+                float nx = sinf(th) * sinf(ph) / std::max(rx, 1e-5f);
+                float ny = cosf(th) / std::max(ry, 1e-5f);
+                float nz = sinf(th) * cosf(ph) / std::max(rz, 1e-5f);
+                const float nl = sqrtf(nx * nx + ny * ny + nz * nz);
+                glNormal3f(nx / nl, ny / nl, nz / nl);
                 col(base, shade(ii[v], jj[v]) * f);
                 glVertex3f(p[v][0], p[v][1], p[v][2]);
             }
@@ -213,6 +227,13 @@ void octa(float cx, float cy, float cz,
 
     glBegin(GL_TRIANGLES);
     for (int i = 0; i < 8; ++i) {
+        const float ux = tris[i].b[0] - tris[i].a[0];
+        const float uy = tris[i].b[1] - tris[i].a[1];
+        const float uz = tris[i].b[2] - tris[i].a[2];
+        const float vx = tris[i].c[0] - tris[i].a[0];
+        const float vy = tris[i].c[1] - tris[i].a[1];
+        const float vz = tris[i].c[2] - tris[i].a[2];
+        glNormal3f(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
         col(c, tris[i].k);
         glVertex3fv(tris[i].a);
         glVertex3fv(tris[i].b);
@@ -240,12 +261,14 @@ void grassTuft(float x, float z, float h, int seed)
 
         glBegin(GL_TRIANGLES);
         // front face
+        glNormal3f(0.0f, 0.0f, 1.0f);
         col(GRASS_D);
         glVertex3f(-w, 0.0f, 0.0f);
         glVertex3f( w, 0.0f, 0.0f);
         col(GRASS_L);
         glVertex3f(lean, bh, 0.0f);
         // back face (so it shows from both sides)
+        glNormal3f(0.0f, 0.0f, -1.0f);
         col(GRASS_D, 0.85f);
         glVertex3f( w, 0.0f, 0.0f);
         glVertex3f(-w, 0.0f, 0.0f);
@@ -282,6 +305,7 @@ void barkRidge(float aC, float yA, float yB, const C& c, float width)
         float r1 = trunkR(y + step) + 0.012f;
 
         col(c, sideShade(a0));
+        glNormal3f(sinf(a0), 0.0f, cosf(a0));
         glVertex3f(r0 * sinf(a0 - width), y,        r0 * cosf(a0 - width));
         glVertex3f(r0 * sinf(a0 + width), y,        r0 * cosf(a0 + width));
         glVertex3f(r1 * sinf(a1 + width), y + step, r1 * cosf(a1 + width));
@@ -342,6 +366,7 @@ void leafBlade(float len, float wid, float curl)
 
                 for (int q = 0; q < 4; ++q) {
                     int idx = (pass == 0) ? q : 3 - q;
+                    glNormal3f(0.0f, pass == 0 ? 1.0f : -1.0f, 0.0f);
                     col(lerpC(BLADE_BASE, BLADE_TIP, s[idx]),
                         k[idx] * (pass == 0 ? 1.0f : 0.85f));
                     glVertex3f(v[idx][0], v[idx][1], v[idx][2]);

@@ -39,23 +39,34 @@ SOURCES=(
     "$PROJECT_ROOT/src/Scene.cpp"
     "$PROJECT_ROOT/src/Animation.cpp"
     "$PROJECT_ROOT/src/Lighting.cpp"
+    "$PROJECT_ROOT/src/farmworld.cpp"
     "$PROJECT_ROOT/src/graphics/Primitives.cpp"
+    "$PROJECT_ROOT/src/graphics/Shadow.cpp"
+    "$PROJECT_ROOT/src/graphics/TextureManager.cpp"
     "$PROJECT_ROOT/src/objects/Farmhouse.cpp"
     "$PROJECT_ROOT/src/objects/Animals.cpp"
     "$PROJECT_ROOT/src/objects/Barn.cpp"
     "$PROJECT_ROOT/src/objects/Farmer.cpp"
     "$PROJECT_ROOT/src/objects/Pond.cpp"
+    "$PROJECT_ROOT/src/objects/Bridge.cpp"
+    "$PROJECT_ROOT/src/objects/PowerPlant.cpp"
     "$PROJECT_ROOT/src/objects/PowerSubstation.cpp"
     "$PROJECT_ROOT/src/objects/Vegetation.cpp"
     "$PROJECT_ROOT/src/objects/Tractor.cpp"
     "$PROJECT_ROOT/src/objects/windmill.cpp"
     "$PROJECT_ROOT/src/objects/sky.cpp"
     "$PROJECT_ROOT/src/objects/cloud.cpp"
+    "$PROJECT_ROOT/src/objects/Birds.cpp"
+    "$PROJECT_ROOT/src/objects/Village.cpp"
 )
 
 echo "Building Phase 1..."
 "$CXX" \
     -std=c++17 \
+    -O2 \
+    -Wall \
+    -Wextra \
+    -Wpedantic \
     -I"$MSYS_ROOT/include" \
     -I"$PROJECT_ROOT/include" \
     "${SOURCES[@]}" \

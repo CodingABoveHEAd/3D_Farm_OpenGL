@@ -46,6 +46,7 @@ void getLightPosition(float& x, float& y, float& z)
 
 void drawSubstation(float x, float z, float yaw, float time)
 {
+    (void)time;
     g_subX = x;
     g_subZ = z;
 

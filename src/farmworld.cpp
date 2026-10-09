@@ -1548,7 +1548,7 @@ void drawGroundCells(float camX, float camZ)
             const float cellX = cu * c - cv * s;
             const float cellZ = cu * s + cv * c;
 
-            float cr, cg, cb;
+            float cr = 0.28f, cg = 0.52f, cb = 0.21f;
             const bool crop = cropTileColor(a, b, cellX, cellZ, cr, cg, cb);
 
             const int ca[4] = {a, a + 1, a + 1, a};

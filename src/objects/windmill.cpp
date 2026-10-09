@@ -74,22 +74,27 @@ void frustum(float y0, float h, float bh, float th, const C& c)
     float y1 = y0 + h;
     glBegin(GL_QUADS);
         // front (+Z)  - brightest
+        glNormal3f(0.0f, 0.0f, 1.0f);
         col(c, 1.00f);
         glVertex3f(-bh, y0,  bh); glVertex3f( bh, y0,  bh);
         glVertex3f( th, y1,  th); glVertex3f(-th, y1,  th);
         // right (+X)
+        glNormal3f(1.0f, 0.0f, 0.0f);
         col(c, 0.86f);
         glVertex3f( bh, y0,  bh); glVertex3f( bh, y0, -bh);
         glVertex3f( th, y1, -th); glVertex3f( th, y1,  th);
         // back (-Z)  - darkest
+        glNormal3f(0.0f, 0.0f, -1.0f);
         col(c, 0.60f);
         glVertex3f( bh, y0, -bh); glVertex3f(-bh, y0, -bh);
         glVertex3f(-th, y1, -th); glVertex3f( th, y1, -th);
         // left (-X)
+        glNormal3f(-1.0f, 0.0f, 0.0f);
         col(c, 0.72f);
         glVertex3f(-bh, y0, -bh); glVertex3f(-bh, y0,  bh);
         glVertex3f(-th, y1,  th); glVertex3f(-th, y1, -th);
         // top
+        glNormal3f(0.0f, 1.0f, 0.0f);
         col(c, 1.08f);
         glVertex3f(-th, y1,  th); glVertex3f( th, y1,  th);
         glVertex3f( th, y1, -th); glVertex3f(-th, y1, -th);
@@ -106,6 +111,7 @@ void cylinderZ(float cx, float cy, float z0, float radius, float len,
     for (int i = 0; i < segs; ++i) {
         float a0 = 2.0f * PI * i / segs;
         float a1 = 2.0f * PI * (i + 1) / segs;
+        glNormal3f(cosf((a0 + a1) * 0.5f), sinf((a0 + a1) * 0.5f), 0.0f);
         col(c, (i % 2) ? 0.88f : 1.0f);
         glVertex3f(cx + radius * cosf(a0), cy + radius * sinf(a0), z0);
         glVertex3f(cx + radius * cosf(a1), cy + radius * sinf(a1), z0);
@@ -117,6 +123,7 @@ void cylinderZ(float cx, float cy, float z0, float radius, float len,
     // front disc
     col(c, 1.12f);
     glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0.0f, 0.0f, 1.0f);
     glVertex3f(cx, cy, z1);
     for (int i = 0; i <= segs; ++i) {
         float a = 2.0f * PI * i / segs;
@@ -131,6 +138,7 @@ void archFan(float cx, float cy, float z, float radius,
 {
     col(c, k);
     glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0.0f, 0.0f, 1.0f);
     glVertex3f(cx, cy, z);
     for (int i = 0; i <= 14; ++i) {
         float a = PI * i / 14.0f;
@@ -145,6 +153,7 @@ void discFan(float cx, float cy, float z, float radius,
 {
     col(c, k);
     glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0.0f, 0.0f, 1.0f);
     glVertex3f(cx, cy, z);
     for (int i = 0; i <= 18; ++i) {
         float a = 2.0f * PI * i / 18.0f;
@@ -351,6 +360,7 @@ void drawBlade(float length, float width)
 
     // ---- Sail cloth: alternating canvas panels (flat quads) ----
     glBegin(GL_QUADS);
+    glNormal3f(0.0f, 0.0f, 1.0f);
     for (int j = 0; j < bays; ++j) {
         col((j % 2) ? CANVAS_B : CANVAS_A);
         float y0 = yS + j * bayH + 0.01f;

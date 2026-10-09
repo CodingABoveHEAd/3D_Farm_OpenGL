@@ -14,6 +14,9 @@ void initField();
 // Advance all clouds using delta time and wrap them when they exit.
 void updateField(float dt);
 
+// Sets the interpolated night tint (0 = daylight, 1 = full night).
+void setNightAmount(float nightAmount);
+
 // Draw every cloud in the field.
 void drawField();
 

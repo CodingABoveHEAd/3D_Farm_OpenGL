@@ -21,8 +21,10 @@ public:
     Scene();
     void handleInput();
     void update(float deltaTime);
+    void renderSky() const;
     void render() const;
     bool isNight() const;
+    float nightAmount() const;
 
 private:
     struct FarmLayout
@@ -47,6 +49,10 @@ private:
     void renderCropWorkers() const;
     void renderScatteredTrees() const;
     void renderBarns() const;
+    void applyNightLights() const;
+    void renderNightFixtures() const;
+    void renderNightLightPools() const;
+    void drawNightBulb(float x, float y, float z, float scale) const;
     void renderFarm(float x, float z, float scale, const FarmLayout& layout) const;
     void renderCropField() const;
     void renderCrops() const;
@@ -72,6 +78,7 @@ private:
     std::array<float, 6> farmerTrafficTimers_{};
     std::array<FarmLayout, 12> farmLayouts_;
     std::array<float, 4> roadTractorZ_;
+    std::array<float, 4> roadTractorWheelRotation_{};
     std::array<bool, 4> tractorTrafficActive_{};
     std::array<float, 4> tractorTrafficTimers_{};
     std::mt19937 trafficRng_;

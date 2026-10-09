@@ -140,18 +140,40 @@ comment and uses the sampled points to create connected wooden rail segments.
 
 ## Controls
 
-- `W`, `A`, `S`, `D`: move the camera
+- `W`, `S`: move forward/backward relative to the camera's current heading
+- `A`, `D`: strafe left/right relative to the camera's current heading
 - `Q`, `E`: move vertically
 - `Left Shift`: move faster
 - `Left Ctrl`: move slowly for precise positioning
-- Mouse: rotate the camera
+- Left click or `Tab`: capture/release the mouse; move the mouse to look
 - Arrow keys: rotate the camera as an alternative
 - `R`: reset the camera
-- `I`, `K`: move tractor forward/backward
-- `J`, `L`: move tractor left/right
-- `Esc`: exit
+- `I`, `K`: drive the tractor forward/backward
+- `J`, `L`: steer the tractor left/right while driving
+- `N`: toggle day/night mode (one toggle per key press)
+- `P`: pause/resume all scene animation
+- `+`, `-`: adjust windmill speed
+- `F11`: toggle fullscreen while preserving the windowed size and position
+- `V`: toggle vertical synchronization
+- `Esc`: release a captured mouse; press again to exit
 
-The mouse cursor is captured while the application is running. Press `Esc` to close the window and release the cursor.
+The title bar reports current FPS, frame time, V-sync state, and window mode.
+WASD movement stays parallel to the ground even while looking up or down;
+combined directions are normalized so diagonal movement is not faster.
+
+Night mode transitions smoothly over three seconds and adds a moon, stars,
+darker clouds, moonlight, warm building/street lighting, and headlights that
+follow the moving road tractors. The transition continues while scene
+animation is paused. Visual and timing constants—including the transition
+duration, sky/fog colors, global light levels, and lamp colors—are centralized
+in `include/DayNightSettings.h`.
+
+The village environment also includes enlarged traditional windmills, varied
+farm grass, larger animated ponds, pond and roadside seating, three individual
+tea shops with animated customers, and frame-rate-independent bird flocks.
+During full night, daytime flocks fade out and an occasional distant pair
+crosses the moon. Cows alternate between grazing and briefly raising their
+heads; all ambient motion follows the shared pausable scene clock.
 
 ## Phase 1 Run Script
 
@@ -181,5 +203,37 @@ The included `CMakeLists.txt` expects GLFW to be available through a CMake packa
 cmake -S . -B build
 cmake --build build
 ```
+
+For the MSYS2 UCRT64 toolchain on Windows, a complete Release build is:
+
+```powershell
+cmake -S . -B build-cmake -G "MinGW Makefiles" `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_PREFIX_PATH=C:/msys64/ucrt64 `
+  -DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe `
+  -DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/mingw32-make.exe
+cmake --build build-cmake -j 4
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+.\build-cmake\Animated3DFarmScene.exe
+```
+
+For an uncapped, automatically terminating performance run, set
+`FARM_VSYNC=0` and `FARM_BENCHMARK_SECONDS` before launching. The first five
+seconds are treated as display-list warm-up; override that with
+`FARM_BENCHMARK_WARMUP` when needed. A machine-readable `BENCHMARK` line is
+printed on completion. `FARM_WINDOW_SMOKE_TEST=1` runs an automatic windowed,
+fullscreen, restored, and resized transition check and then exits.
+
+## Runtime architecture
+
+`Application` owns the GLFW window, fullscreen/V-sync state, timing, and frame
+order. `Camera` owns view input and frame-rate-independent movement. `Scene`
+owns gameplay objects, visibility/LOD decisions, and the single pausable
+animation clock. Object modules build their models from the shared OpenGL
+primitives. Static farms and vegetation use display lists, while distant trees
+and clouds use cheaper models and frustum/distance culling. Linear fog hides
+the LOD horizon and improves depth cues without changing nearby farm detail.
+`Village` owns reusable benches, seated/standing villagers, tea shops, and
+farm grass, while `Birds` owns sky-space flock and moon-crossing animation.
 
 `test.cpp` is preserved as the original 2D reference implementation while the new application is developed under `src/` and `include/`.

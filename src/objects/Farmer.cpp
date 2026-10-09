@@ -3,6 +3,7 @@
 #include "graphics/Primitives.h"
 
 #include <GLFW/glfw3.h>
+#include <algorithm>
 #include <cmath>
 #include <initializer_list>
 
@@ -186,7 +187,7 @@ void Farmer::update(float deltaTime)
         else
         {
             heading_ = std::atan2(dx, dz) * 180.0f / Pi;
-            const float step = speed_ * deltaTime;
+            const float step = std::min(speed_ * deltaTime, distance);
             x_ += dx / distance * step;
             z_ += dz / distance * step;
         }
@@ -216,7 +217,7 @@ void Farmer::update(float deltaTime)
         else
         {
             heading_ = std::atan2(dx, dz) * 180.0f / Pi;
-            const float step = speed_ * deltaTime;
+            const float step = std::min(speed_ * deltaTime, distance);
             x_ += dx / distance * step;
             z_ += dz / distance * step;
         }

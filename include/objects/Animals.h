@@ -1,6 +1,7 @@
 #pragma once
 
 namespace Animals {
-void drawCow(float x, float z, float scale, float rotation);
-void drawChicken(float x, float z, float scale, float rotation, bool rooster = false);
+void drawCow(float x, float z, float scale, float rotation, float animationTime);
+void drawChicken(float x, float z, float scale, float rotation,
+                 float animationTime, bool rooster = false);
 }

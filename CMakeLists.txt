@@ -15,19 +15,32 @@ add_executable(Animated3DFarmScene
     src/Scene.cpp
     src/Animation.cpp
     src/Lighting.cpp
+    src/farmworld.cpp
     src/graphics/Primitives.cpp
+    src/graphics/Shadow.cpp
+    src/graphics/TextureManager.cpp
     src/objects/Farmhouse.cpp
     src/objects/Animals.cpp
     src/objects/Barn.cpp
     src/objects/Farmer.cpp
     src/objects/Pond.cpp
+    src/objects/Bridge.cpp
+    src/objects/PowerPlant.cpp
     src/objects/PowerSubstation.cpp
     src/objects/Vegetation.cpp
     src/objects/Tractor.cpp
     src/objects/windmill.cpp
     src/objects/sky.cpp
     src/objects/cloud.cpp
+    src/objects/Birds.cpp
+    src/objects/Village.cpp
 )
 
 target_include_directories(Animated3DFarmScene PRIVATE include)
 target_link_libraries(Animated3DFarmScene PRIVATE glfw OpenGL::GL)
+
+if(MSVC)
+    target_compile_options(Animated3DFarmScene PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(Animated3DFarmScene PRIVATE -Wall -Wextra -Wpedantic)
+endif()

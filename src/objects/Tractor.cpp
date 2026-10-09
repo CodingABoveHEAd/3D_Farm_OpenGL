@@ -1,5 +1,6 @@
 #include "objects/Tractor.h"
 
+#include "DayNightSettings.h"
 #include "Input.h"
 #include "graphics/Primitives.h"
 
@@ -12,6 +13,7 @@ namespace
 {
 constexpr float Pi = 3.14159265358979323846f;
 constexpr float TractorSpeed = 5.0f;
+constexpr float TractorTurnSpeed = 72.0f;
 
 // ------------------------------------------------------------
 // Helper: draw a small colored cube
@@ -106,48 +108,30 @@ void drawCabinGlass()
 
 void Tractor::update(float deltaTime)
 {
-    float moveX = 0.0f;
-    float moveZ = 0.0f;
+    const float throttle =
+        (Input::isDown(GLFW_KEY_I) ? 1.0f : 0.0f)
+        - (Input::isDown(GLFW_KEY_K) ? 1.0f : 0.0f);
+    const float steering =
+        (Input::isDown(GLFW_KEY_J) ? 1.0f : 0.0f)
+        - (Input::isDown(GLFW_KEY_L) ? 1.0f : 0.0f);
 
-    // J = left
-    if (Input::isDown(GLFW_KEY_J))
+    // I/K are true forward/reverse controls. J/L steer the tractor instead
+    // of sliding it sideways, and reversing naturally reverses steering.
+    if (throttle != 0.0f)
     {
-        moveX -= 1.0f;
+        heading_ += steering * TractorTurnSpeed * deltaTime
+            * (throttle > 0.0f ? 1.0f : -1.0f);
+        heading_ = std::fmod(heading_, 360.0f);
+
+        const float headingRadians = heading_ * Pi / 180.0f;
+        const float distance = TractorSpeed * throttle * deltaTime;
+        position_[0] -= std::sin(headingRadians) * distance;
+        position_[2] -= std::cos(headingRadians) * distance;
+
+        const float wheelRadius = 0.85f;
+        wheelRotation_ += distance / wheelRadius * 180.0f / Pi;
+        wheelRotation_ = std::fmod(wheelRotation_, 360.0f);
     }
-
-    // L = right
-    if (Input::isDown(GLFW_KEY_L))
-    {
-        moveX += 1.0f;
-    }
-
-    // I = forward
-    if (Input::isDown(GLFW_KEY_I))
-    {
-        moveZ -= 1.0f;
-    }
-
-    // K = backward
-    if (Input::isDown(GLFW_KEY_K))
-    {
-        moveZ += 1.0f;
-    }
-
-    const float moveLength =
-        std::sqrt(moveX * moveX + moveZ * moveZ);
-
-    if (moveLength <= 0.0f)
-    {
-        return;
-    }
-
-    const float distance = TractorSpeed * deltaTime;
-
-    moveX = moveX / moveLength * distance;
-    moveZ = moveZ / moveLength * distance;
-
-    position_[0] += moveX;
-    position_[2] += moveZ;
 
     // Keep tractor inside the farm
     position_[0] =
@@ -156,36 +140,36 @@ void Tractor::update(float deltaTime)
     position_[2] =
         std::fmax(-15.5f, std::fmin(15.5f, position_[2]));
 
-    // Wheel rotation
-    const float wheelRadius = 0.85f;
-
-    wheelRotation_ +=
-        distance / wheelRadius * 180.0f / Pi;
-
-    if (wheelRotation_ >= 360.0f)
-    {
-        wheelRotation_ -= 360.0f;
-    }
 }
 
-void Tractor::updateRoad(float deltaTime, float& z)
+void Tractor::updateRoad(float deltaTime, float& z, float& wheelRotation)
 {
-    z += 5.5f * deltaTime;
+    constexpr float speed = 5.5f;
+    constexpr float wheelRadius = 0.85f;
+    z += speed * deltaTime;
+    wheelRotation = std::fmod(
+        wheelRotation + speed * deltaTime / wheelRadius * 180.0f / Pi,
+        360.0f);
     if (z > 108.0f)
     {
         z = -108.0f;
     }
 }
 
-void Tractor::drawRoadTractor(float z, Color color) const
+void Tractor::drawRoadTractor(float z, float wheelRotation, Color color) const
 {
     const float oldX = position_[0];
     const float oldY = position_[1];
     const float oldZ = position_[2];
+    const float oldHeading = heading_;
+    const float oldWheelRotation = wheelRotation_;
     displayColor_ = color;
     position_[0] = 0.0f;
     position_[1] = 0.0f;
     position_[2] = z;
+    // The detailed model faces -Z. Road traffic advances toward +Z.
+    heading_ = 180.0f;
+    wheelRotation_ = wheelRotation;
     glPushMatrix();
     glScalef(1.00f, 1.00f, 1.00f);
     drawTractor();
@@ -193,6 +177,8 @@ void Tractor::drawRoadTractor(float z, Color color) const
     position_[0] = oldX;
     position_[1] = oldY;
     position_[2] = oldZ;
+    heading_ = oldHeading;
+    wheelRotation_ = oldWheelRotation;
     displayColor_ = Color::Red;
 }
 
@@ -231,6 +217,7 @@ void Tractor::drawTractor() const
         position_[1],
         position_[2]
     );
+    glRotatef(heading_, 0.0f, 1.0f, 0.0f);
 
     // Main components
     drawBody();
@@ -1257,6 +1244,13 @@ void Tractor::drawHeadlight(float x, float z) const
         0.30f, 0.22f, 16
     );
 
+    glPushAttrib(GL_LIGHTING_BIT | GL_CURRENT_BIT);
+    const GLfloat emission[] = {
+        DayNightSettings::Headlight[0] * nightAmount_,
+        DayNightSettings::Headlight[1] * nightAmount_,
+        DayNightSettings::Headlight[2] * nightAmount_, 1.0f};
+    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+
     // Bright lens
     drawCylZ(
         1.0f, 0.90f, 0.45f,
@@ -1270,6 +1264,7 @@ void Tractor::drawHeadlight(float x, float z) const
         x, 2.80f, z - 0.15f,
         0.10f, 0.04f, 12
     );
+    glPopAttrib();
 
     // Small visor above the light
     drawBox(
