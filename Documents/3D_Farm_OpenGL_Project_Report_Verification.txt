@@ -1,0 +1,33 @@
+3D Farm OpenGL Project Report - final verification
+Generated: 2026-10-10 11:09:36 +06:00
+
+FINAL DELIVERABLES
+DOCX: D:\4-1\3D_Farm_OpenGl\Documents\3D_Farm_OpenGL_Project_Report_Final_20_Pages.docx
+PDF:  D:\4-1\3D_Farm_OpenGl\Documents\3D_Farm_OpenGL_Project_Report_Final_20_Pages.pdf
+HTML source: D:\4-1\3D_Farm_OpenGl\Documents\3D_Farm_OpenGL_Project_Report_20_Pages.html
+
+DOCUMENT VALIDATION
+HTML report sections: 20
+Microsoft Word computed pages: 20
+PDF page objects: 20
+Embedded native DOCX image parts: 21
+DOCX/PDF page rendering: all 20 pages rendered and visually inspected
+Blank or overflow pages found: 0
+Clipped screenshots found in final output: 0
+Known mojibake markers in DOCX XML: 0
+
+PROJECT VALIDATION USED BY THE REPORT
+Release build: passed (Animated3DFarmScene and CameraControlTests)
+CTest: 1/1 camera_controls passed
+Runtime launch: passed; the executable opened, rendered live frames, and exited normally under the benchmark timer
+Measured performance reported in document: 6.42 FPS / 155.852 ms per frame from the comparable 10-second, VSync-off instrumented run after a 5-second warmup
+
+EVIDENCE NOTES
+All images embedded in the final report are genuine captures of the built executable; none were illustrated or reconstructed.
+Repeated instances share representative screenshots where they use the same drawing function.
+Small or moving details such as individual birds, vehicle drivers, sparks, smoke wisps, grass blades, and every repeated prop are documented from source and shown only within wider environment captures; no isolated close-up exists for every such instance.
+The active Pond.cpp bridge uses a sine arch. The cubic Bezier bridge belongs to the inactive FarmWorld/Bridge.cpp path; the report distinguishes these paths.
+
+SHA-256
+DOCX: 4C103524766B44C6CD03408EE61AFF4691A877C900702556B1FDA369A8595837
+PDF:  BAA9304C6052F08673D9E6A84DEC6CD694911401BB142B50084D4828348E6D02

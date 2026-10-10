@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html><head><meta charset='utf-8'/><title>3D Farm OpenGL Project Report</title><style>@page { size: A4; margin: 1.25cm 1.30cm 1.30cm 1.30cm; }
+body { font-family: Calibri, Arial, sans-serif; font-size: 9pt; line-height: 1.12; color: #26352c; margin: 0; }
+.page { page-break-after: always; position: relative; }
+.page.last { page-break-after: auto; }
+.running { border-bottom: 1px solid #93a99a; color: #52705c; font-size: 7.5pt; letter-spacing: 1.2pt; padding-bottom: 0.12cm; margin-bottom: 0.35cm; }
+.footer { margin-top: 0.28cm; padding-top: 0.12cm; border-top: 1px solid #aebdb2; font-size: 7.2pt; color: #607267; display: table; width: 100%; }
+.footer span { display: table-cell; }
+.footer span:last-child { text-align: right; font-weight: bold; }
+h1 { margin: 0 0 0.25cm 0; font-size: 20pt; line-height: 1; color: #174f35; font-weight: 700; }
+h2 { margin: 0.24cm 0 0.10cm 0; font-size: 11.5pt; line-height: 1.05; color: #356b49; }
+p { margin: 0.06cm 0 0.13cm 0; text-align: justify; }
+code { font-family: Consolas, 'Courier New', monospace; font-size: 8pt; color: #823f24; }
+table { border-collapse: collapse; width: 100%; }
+th { background: #285f42; color: white; font-weight: 700; text-align: left; }
+th, td { border: 1px solid #b8c5bb; padding: 0.09cm 0.13cm; vertical-align: top; }
+.shot { border: 1px solid #526b5a; display: block; margin-left: auto; margin-right: auto; height: auto; }
+.center { text-align: center; }
+.caption { font-size: 7.3pt; color: #57665d; text-align: center; margin: 0.05cm 0 0.10cm 0; }
+.imagegrid td { width: 50%; border: 0; padding: 0 0.10cm; }
+.imagegrid.three td { width: 33.33%; }
+.callout { background: #edf4ef; border-left: 4px solid #3d7d55; padding: 0.14cm 0.20cm; margin: 0.17cm 0; }
+.formula { font-family: Cambria Math, Cambria, serif; font-size: 10pt; text-align: center; background: #f3f1e8; border: 1px solid #d3cfb8; padding: 0.13cm; margin: 0.11cm 0; }
+.toc { font-size: 8.15pt; }
+.toc td:first-child { width: 1.0cm; text-align: center; font-weight: bold; }
+.toc td:nth-child(2) { width: 5.1cm; }
+.facts td { text-align: center; background: #eef4ef; padding: 0.18cm; width: 25%; }
+.facts b { font-size: 14pt; color: #245f3f; }
+.keyvalue td:first-child { width: 4.0cm; font-weight: 600; }
+.architecture td:first-child { width: 3.1cm; }
+.architecture td:last-child { width: 5.7cm; }
+.flow { margin: 0.18cm 0; }
+.flow td { text-align: center; background: #eef4ef; border-color: #91a997; }
+.flow .arrow { width: 0.45cm; border: 0; background: white; font-size: 14pt; color: #3d7d55; }
+.inventory { font-size: 8.35pt; }
+.inventory td:first-child { width: 3.1cm; }
+.tag { display: inline-block; padding: 0.03cm 0.10cm; color: white; font-size: 7pt; font-weight: bold; }
+.tag.active { background: #2d7c4d; }.tag.inactive { background: #8a4b3c; }.tag.note { background: #8a6a2d; }
+.controls { font-size: 7.75pt; line-height: 1.04; }
+.controls td { padding-top: 0.045cm; padding-bottom: 0.045cm; }
+.controls td:first-child { width: 2.45cm; font-weight: bold; }
+.controls td:nth-child(2) { width: 4.8cm; }
+.matrix { font-size: 7.7pt; }
+.compact { margin: 0.06cm 0 0.10cm 0; padding-left: 0.52cm; }
+.compact li { margin-bottom: 0.055cm; }
+.references { font-size: 8.0pt; }
+.references td:first-child { width: 0.8cm; text-align: center; font-weight: bold; }
+.cover-kicker { margin-top: 0.6cm; color: #4e705b; font-size: 9pt; letter-spacing: 1.5pt; font-weight: bold; }
+.cover-rule { width: 2.4cm; border-top: 5px solid #2f774d; margin: 0.28cm 0 0.35cm 0; }
+.cover-title { font-size: 27pt; line-height: 1.02; color: #164d34; font-weight: 700; }
+.cover-subtitle { margin: 0.20cm 0 0.38cm; font-size: 11pt; color: #607267; }
+.cover-image { text-align: center; }
+.cover-grid { width: 15.8cm; margin: 0.35cm auto 0; }
+.cover-grid td { border-left: 0; border-right: 0; padding: 0.11cm; }
+.cover-grid .label { width: 3.2cm; text-transform: uppercase; color: #52705c; font-size: 7.5pt; letter-spacing: 0.8pt; font-weight: bold; }
+.cover-note { margin-top: 0.35cm; font-size: 8pt; color: #607267; text-align: center; }
+.signoff { margin-top: 0.28cm; border: 1px solid #5e7e69; color: #2b6745; padding: 0.18cm; text-align: center; font-size: 8pt; letter-spacing: 1.1pt; font-weight: bold; }</style></head>
+<body><section class='page'><div class='cover-kicker'>COMPUTER GRAPHICS PROJECT DOCUMENTATION</div>
+<div class='cover-rule'></div>
+<div class='cover-title'>Animated 3D Farm Scene<br/>with Lighting and Transformations</div>
+<div class='cover-subtitle'>A source-verified design, implementation, mathematics, interaction, and evaluation report</div>
+<div class='cover-image'><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/01_overview_day.png' style='width:17.8cm' alt='Daytime overview of the running farm scene'/></div>
+<div class='cover-grid'>
+  <table>
+    <tr><td class='label'>Project</td><td>3D_farm_OpenGL</td></tr>
+    <tr><td class='label'>Student</td><td>Niloy Chowdhury</td></tr>
+    <tr><td class='label'>Roll</td><td>2107117</td></tr>
+    <tr><td class='label'>Technology</td><td>C++17, GLFW, OpenGL 2.1 compatibility rendering</td></tr>
+    <tr><td class='label'>Report basis</td><td>Current source tree, successful Release build, automated tests, and direct runtime inspection</td></tr>
+  </table>
+</div>
+<p class='cover-note'>Prepared from the repository state reviewed on 10 October 2026. No institution, course, or supervisor is stated because the repository does not supply those details.</p><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 1 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Contents and document map</h1><table class='toc'>
+<tr><th>Page</th><th>Section</th><th>Purpose</th></tr>
+<tr><td>1</td><td>Cover</td><td>Project identity and evidence basis</td></tr>
+<tr><td>2</td><td>Contents and document map</td><td>Navigation and reading guide</td></tr>
+<tr><td>3</td><td>Project scope and verification</td><td>Objectives, toolchain, build and test status</td></tr>
+<tr><td>4</td><td>Architecture and frame pipeline</td><td>Ownership, control flow, and active modules</td></tr>
+<tr><td>5</td><td>World composition</td><td>Spatial layout, day/night overview, scene inventory</td></tr>
+<tr><td>6</td><td>Farm construction</td><td>Farmhouse, crops, fences, trees, windmills, variation</td></tr>
+<tr><td>7</td><td>Road and vehicles</td><td>Manual tractor, traffic convoy, driver LOD and utilities</td></tr>
+<tr><td>8</td><td>Animals and field work</td><td>Cows, poultry, farmers and agricultural animation</td></tr>
+<tr><td>9</td><td>Village life and shops</td><td>Three shop variants, seating, props and villagers</td></tr>
+<tr><td>10</td><td>Barn system</td><td>Shell, accessible interior and detailed contents</td></tr>
+<tr><td>11</td><td>Barn interaction and power</td><td>Doors, collision, props, lighting and load shedding</td></tr>
+<tr><td>12</td><td>Ponds, water and bridge</td><td>Water layers, fauna, banks and Bezier bridge</td></tr>
+<tr><td>13</td><td>Electrical infrastructure</td><td>Substation, poles, local lights and outage behavior</td></tr>
+<tr><td>14</td><td>Sky and environmental effects</td><td>Sun, moon, clouds, birds, fog and bonfires</td></tr>
+<tr><td>15</td><td>Rendering and lighting</td><td>Fixed-function pipeline, materials, transparency, lights</td></tr>
+<tr><td>16</td><td>Transformation and camera mathematics</td><td>Matrices, projection, view basis and frustum culling</td></tr>
+<tr><td>17</td><td>Simulation mathematics</td><td>Animation, collision, procedural placement and curves</td></tr>
+<tr><td>18</td><td>Complete controls</td><td>Keyboard/mouse reference and interaction matrix</td></tr>
+<tr><td>19</td><td>Performance, tests and limitations</td><td>Optimizations, measured result, validation and caveats</td></tr>
+<tr><td>20</td><td>Conclusion and references</td><td>Outcomes, viva points and repository sources</td></tr>
+</table>
+<div class='callout'><b>Reading convention.</b> “Active” means reachable from the current <code>Application</code>/<code>Scene</code> execution path. “Compiled but inactive” means present in the target but not instantiated or called by that path. Runtime screenshots are genuine captures of the built executable; no image has been illustrated or reconstructed.</div>
+<h2>Project at a glance</h2>
+<table class='facts'>
+<tr><td><b>12</b><br/>farm instances</td><td><b>4</b><br/>outer barns</td><td><b>3</b><br/>ponds</td><td><b>5</b><br/>bonfire sites</td></tr>
+<tr><td><b>3</b><br/>road tractors</td><td><b>3</b><br/>shop variants</td><td><b>7</b><br/>maximum ranked local lights</td><td><b>1</b><br/>automated test executable</td></tr>
+</table><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 2 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Project scope and verification</h1><h2>1. Purpose and objectives</h2>
+<p>The project is an explorable low-polygon rural world designed to demonstrate hierarchical modeling, reusable geometry, interactive navigation, frame-rate-independent animation, lighting, transparency, collision, and scene-scale optimization. Its current result is substantially larger than a single model: a central road connects repeated but varied farms, village amenities, ponds, forests, barns, traffic, people, animals, and an electrical distribution site.</p>
+<p>The implementation goal is educational clarity. Objects are built procedurally from cubes, spheres, cylinders, planes, and line-like struts; transformations remain visible in the source; animation state is updated separately from rendering; and controls expose scene systems directly. This makes the program suitable for demonstrating both OpenGL fundamentals and the practical problems that arise in a populated world.</p>
+<h2>2. Evidence and method</h2>
+<p>This report was produced by reading the complete current <code>include/</code>, <code>src/</code>, <code>tests/</code>, build configuration and README; configuring and compiling the Release target; running the automated test; launching the graphical application; exercising state toggles; and capturing the client area. Claims are tied to the current code rather than old phase descriptions.</p>
+<table class='keyvalue'>
+<tr><th>Item</th><th>Verified result</th></tr>
+<tr><td>Language and build</td><td>C++17; CMake minimum 3.16; MinGW Makefiles; MSYS2 UCRT64 GCC 16.2.0.</td></tr>
+<tr><td>Libraries</td><td>GLFW 3.5.1 configuration package and Windows <code>opengl32</code> through <code>OpenGL::GL</code>.</td></tr>
+<tr><td>Graphics context</td><td>OpenGL 2.1 request using compatibility-profile fixed-function features.</td></tr>
+<tr><td>Build status</td><td>Release configure and build completed successfully.</td></tr>
+<tr><td>Automated test</td><td><code>ctest</code>: 1/1 <code>CameraControlTests</code> passed in approximately 0.09 s.</td></tr>
+<tr><td>Window behavior</td><td>Windowed 1280 x 720, fullscreen 1920 x 1080, restore, resize to 1000 x 600, and smoke exit all worked.</td></tr>
+</table>
+<h2>3. Scope boundaries</h2>
+<p>The active renderer intentionally does not use GLSL shaders, VBOs, VAOs, image textures, a general shadow system, true reflection, or refraction. Visual richness comes from geometry, materials, lighting, fog, blending and animation. Barns are the only world structures with camera collision. These boundaries are documented as limitations, not silently described as implemented functionality.</p>
+<div class='callout'><b>Repository identity.</b> The README identifies the student as Niloy Chowdhury, roll 2107117. No unsupported institutional metadata has been added.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 3 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Architecture and frame pipeline</h1><h2>1. Active ownership</h2>
+<table class='architecture'>
+<tr><th>Layer</th><th>Primary responsibility</th><th>Representative files</th></tr>
+<tr><td>Entry/application</td><td>Window, GL context, callbacks, timing, fullscreen/VSync, main loop and title telemetry.</td><td><code>main.cpp</code>, <code>Application.cpp</code></td></tr>
+<tr><td>Input/camera</td><td>Persistent/edge key state, mouse capture, first-person motion, view and projection.</td><td><code>Input.cpp</code>, <code>Camera.cpp</code></td></tr>
+<tr><td>Scene coordinator</td><td>World state, toggles, animation, culling, ranked lights, collision and render order.</td><td><code>Scene.cpp</code>, <code>Animation.cpp</code></td></tr>
+<tr><td>Rendering support</td><td>Immediate-mode primitives, materials and directional lighting.</td><td><code>Primitives.cpp</code>, <code>Lighting.cpp</code></td></tr>
+<tr><td>Object modules</td><td>Farms, vegetation, houses, vehicles, people, animals, barns, village, ponds, sky, birds and substation.</td><td><code>src/objects/*.cpp</code></td></tr>
+</table>
+<h2>2. Per-frame sequence</h2>
+<table class='flow'>
+<tr><td><b>1</b><br/>Poll events</td><td class='arrow'>→</td><td><b>2</b><br/>Apply app toggles</td><td class='arrow'>→</td><td><b>3</b><br/>Scene input</td><td class='arrow'>→</td><td><b>4</b><br/>Camera update</td></tr>
+<tr><td><b>8</b><br/>Swap + telemetry</td><td class='arrow'>←</td><td><b>7</b><br/>World render</td><td class='arrow'>←</td><td><b>6</b><br/>Sky render</td><td class='arrow'>←</td><td><b>5</b><br/>Collision + simulation</td></tr>
+</table>
+<p>Initialization creates a 1280 x 720 GLFW window, requests an OpenGL 2.1 context, installs callbacks, enables depth testing and linear fog, applies the initial projection and initializes input/scene state. Each loop clamps long time steps, processes controls, updates simulation values, resolves barn collision, draws the sky with camera translation removed, then draws the translated world.</p>
+<h2>3. Active versus inactive code</h2>
+<table class='keyvalue'>
+<tr><th>Status</th><th>Modules and implications</th></tr>
+<tr><td><span class='tag active'>ACTIVE</span></td><td><code>Scene</code> directly uses the object modules documented on pages 5–14, including the bridge implemented inside <code>Pond.cpp</code> and the active <code>PowerSubstation</code>.</td></tr>
+<tr><td><span class='tag inactive'>INACTIVE</span></td><td><code>FarmWorld</code> is never instantiated; therefore its standalone <code>Bridge</code>, <code>PowerPlant</code> and <code>TextureManager</code> path is not part of the rendered application.</td></tr>
+<tr><td><span class='tag inactive'>INACTIVE</span></td><td><code>Shadow.cpp</code> is compiled but unused. <code>Transform.h</code>, <code>Cloud::drawCloud</code>, <code>Scene::renderTrees</code>, <code>Scene::renderAnimals</code>, and the commented transformation marker are not active.</td></tr>
+<tr><td><span class='tag note'>STALE</span></td><td><code>Animation::cloudOffset</code> is updated but the active cloud field owns its own movement. The README’s older cloud-offset/phase statements should not override current source behavior.</td></tr>
+</table><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 4 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>World composition and object checklist</h1><table class='imagegrid'><tr><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/01_overview_day.png' style='width:8.65cm' alt='Day scene overview'/><div class='caption'>Figure 1a. Genuine day capture: road, farms, people, poles, trees and traffic.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/02_overview_night.png' style='width:8.65cm' alt='Night scene overview'/><div class='caption'>Figure 1b. Genuine night capture: moon, fog, lamps and tractor headlights.</div></td></tr></table>
+<h2>1. Placement system</h2>
+<p><code>Scene::render</code> places 12 reusable farms in six rows beside a central road. For row <code>r=-2...3</code>, <code>z=34r</code>, <code>x=-38</code> or <code>+38</code>, and farm scale is <code>0.78</code>. This is the actual placement equation: <code>Pworld=(x,0,z)+0.78 R(yaw) Plocal</code>. <code>Plocal</code> is a point in one farm; <code>R</code> applies its small layout rotation.</p>
+<h2>2. Source-checked active inventory</h2>
+<table class='inventory'>
+<tr><th>Group</th><th>Distinct implemented objects and features</th></tr>
+<tr><td>Terrain/road</td><td>Ground, asphalt, shoulders, dashed center line, entrance gaps, weathering patches, paths, rocks, flower/grass clearings.</td></tr>
+<tr><td>Farm</td><td>Farmhouse, porch/steps/rails, doors, windows/shutters, chimney, crop soil/rows, fence/gate, trees, crops, flowers, shrubs, windmills.</td></tr>
+<tr><td>Actors/vehicles</td><td>Three road tractors with drivers, manual farm tractors, four roadside farmers, 18 crop workers, cows, hens/roosters, villagers and ducks.</td></tr>
+<tr><td>Village/props</td><td>Timber, brick and bamboo tea shops; counters, shelves, kettles, cups, jars, packets, signs, tables, stools, benches, bicycles, bins and plants.</td></tr>
+<tr><td>Landmarks</td><td>Four barns and interiors; three ponds; active pond bridge; five bonfire sites; electrical substation; distribution poles, wires and lamps.</td></tr>
+<tr><td>Atmosphere</td><td>Gradient dome, sun, moon/craters, stars, 96 clouds, day/night birds, linear fog, water ripples/sparkles, smoke, steam, sparks and light pools.</td></tr>
+</table>
+<div class='callout'><b>Coverage rule.</b> Pages 6-15 give each closely related group a screenshot, code location and object-specific mathematics. Repeated instances share the representative image because their design function is identical.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 5 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Farm construction and variation</h1><div class='center'><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/05_animals_field.png' style='width:13.2cm' alt='Farm with animals and field workers'/><div class='caption'>Figure 2. A populated farm cell: fence, crop rows, farmhouse, cows, workers, trees, pond edge and surrounding farms.</div></div>
+<h2>1. Farmhouse, field, fence and gate</h2>
+<p><code>Scene::renderFarm</code> establishes a farm frame; <code>Farmhouse::render</code> then builds foundation, timber body, gables, two sloped roof slabs, framed windows, shutters, door, chimney, porch, steps and rails. The field is a raised soil plane with ordered <code>Vegetation::drawCrop</code> instances. Fence posts/rails leave an intentional front gate aligned with the path.</p>
+<table class='inventory'>
+<tr><th>Object / code</th><th>Construction and associated mathematics</th></tr>
+<tr><td>House / <code>Farmhouse.cpp</code></td><td>Boxes use <code>p'=T R S p</code>. Roof slabs rotate about Z; paired signs of the angle create the two pitches. Repeated muntins/balusters use <code>xi=x0+i spacing</code>.</td></tr>
+<tr><td>Crop / <code>Vegetation.cpp</code></td><td>A curved stalk center follows <code>x(y)=0.06y^2</code>; blades, grain heads and color-shaded cylinders are attached in the stalk frame.</td></tr>
+<tr><td>Fence, gate, rocks</td><td>Posts repeat at fixed intervals; rails span post midpoints. Rock yaw/scale and grass variation come from stable hashes, so placement does not flicker.</td></tr>
+<tr><td>Trees/flowers / <code>Vegetation.cpp</code>, <code>Village.cpp</code></td><td>Tapered trunk radius is sampled by height. Blossom point <code>(x+r cos a, y, z+r sin a)</code> distributes petals/flowers around stems and crowns.</td></tr>
+<tr><td>Windmill / <code>windmill.cpp</code></td><td>Tapered width is linear interpolation <code>h(y)=h0+(h1-h0)t</code>. Rotor angle obeys <code>a+=omega DeltaT</code>; four blades use <code>a+i(90 degrees)</code>.</td></tr>
+</table>
+<h2>2. Variation and reuse</h2><p><code>FarmLayout</code> changes tree count, zero-to-two cows, zero-to-three chickens, house/crop offsets and optional tractor/windmill. Geometry functions are reused; only parameters differ. Static field, boundary and vegetation groups are recorded in display lists, while animals, house lighting, tractor and rotor remain dynamic.</p>
+<div class='callout'><b>Image reading.</b> Figure 2 shows farmhouse, fence/gate, crop rows, grass, mature trees, cows and workers together. Windmills are visible behind the substation in Figure 9a.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 6 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Road system and vehicles</h1><table class='imagegrid'><tr><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/01_overview_day.png' style='width:8.65cm' alt='Road and village traffic'/><div class='caption'>Figure 3a. Road hierarchy, utility corridor, pedestrian and oncoming tractor.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/08_tea_shop_bamboo.png' style='width:8.65cm' alt='Farm tractor and farm cell'/><div class='caption'>Figure 3b. Reusable farm tractor beside a farmhouse and fenced plots.</div></td></tr></table>
+<h2>1. Road, markings and weathering</h2><p><code>Scene::renderRoad</code> draws a 9-unit-wide plane, two soil shoulders and 64 deterministic flat patches. Center dashes repeat every 12 units; a dash is skipped when <code>|z-rowZ|&lt;6</code> at each farm entrance. Small Y offsets (0.045...0.061) prevent z-fighting.</p>
+<table class='inventory'>
+<tr><th>Object / code</th><th>Build, movement and equation</th></tr>
+<tr><td>Manual tractor / <code>Tractor.cpp</code></td><td>Chassis, engine, cabin/glass, roof, axles, wheels, fenders, lamps, exhaust, bumper, steps, seat, steering wheel and hitch share one root. With heading <code>h</code>, <code>dx=-sin(h)d</code>, <code>dz=-cos(h)d</code>, <code>d=5 input DeltaT</code>.</td></tr>
+<tr><td>Wheels</td><td>Rolling angle follows traveled distance: <code>DeltaAngle=d/r * 180/pi</code>, not elapsed time alone. This keeps wheel spin consistent during forward and reverse travel.</td></tr>
+<tr><td>Road convoy</td><td>Three red/green/blue tractors use <code>z+=5.5 DeltaT</code> on [-108,108]. Initial separation is <code>216/3=72</code>, above the configured 50-unit minimum.</td></tr>
+<tr><td>Drivers/headlights</td><td><code>Village::drawDriver</code> is seated inside each cab and transformed by the vehicle root. Headlights are spotlights whose position/direction follow that same root.</td></tr>
+<tr><td>Road pedestrians</td><td>Four <code>Farmer</code> objects alternate 24-46 s active and 12-25 s waiting states; a same-side spawn must be at least 18 units clear.</td></tr>
+</table>
+<div class='callout'><b>Controls.</b> <code>I/K</code> drive and <code>J/;</code> steer the manual tractor. <code>T</code> pauses convoy and roadside traffic. Vehicles are visual geometry, not camera colliders.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 7 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Animals and agricultural activity</h1><table class='imagegrid'><tr><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/05_animals_field.png' style='width:8.65cm' alt='Cows and crop workers'/><div class='caption'>Figure 4a. Cows, coat patches, crop workers and field rows.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/19_tea_shop_bamboo_close.png' style='width:8.65cm' alt='Farm animals including chicken'/><div class='caption'>Figure 4b. Farm overview with cows and a small chicken beside the house.</div></td></tr></table>
+<h2>1. Cow / <code>Animals::drawCow</code></h2><p>The cow hierarchy includes contact patch, barrel/chest/rump, belly/ribs, withers/hips, three deterministic coat layouts, neck/dewlap, muzzle/mouth/nostrils, eyes/blink, ears/tag, horns, collar/bell, four jointed legs, cloven hooves/dewclaws, udder and tail. <code>seed=0.37x+0.23z</code> separates timing. Grazing uses <code>g=clamp((0.5+0.5 sin(rate*t+phase)-0.20)/0.42)</code>; breathing is <code>1+0.012 sin(1.3t+seed)</code>. Tail and ear fly-swats use high powers of positive sine, producing occasional pulses rather than constant flapping.</p>
+<h2>2. Hen/rooster / <code>Animals::drawChicken</code></h2><p>Body, breast, feather layers, wings, legs/toes, beak, eye, comb/wattle and a different hen/rooster tail share one model. Wander angle is <code>a=a0+0.55t+(0.8*0.55/0.9)sin(0.9t+seed)</code>; position is <code>(x+1.1 sin a,z+1.1 cos a)</code>. Speed <code>1+0.8 cos(0.9t+seed)</code> drives walking; low speed blends into pecking.</p>
+<h2>3. Farmers and villagers</h2>
+<table class='inventory'>
+<tr><td>Crop workers / <code>Farmer.cpp</code></td><td>18 workers (balanced 0-3 per farm) move toward row targets by normalized step <code>p+=((target-p)/distance) min(speed DeltaT,distance)</code>. Arm/leg swing is <code>28 sin(cycle)</code>.</td></tr>
+<tr><td>Road farmers</td><td>The same articulated model follows a road route and state timer. Heading is <code>atan2(dx,dz)</code>.</td></tr>
+<tr><td>Shop, bench, fire people / <code>Village.cpp</code></td><td>Seated/standing poses use tapered limb segments and two-link arm placement. Gesture, head turn and sip motion use phase-shifted sine waves.</td></tr>
+</table>
+<div class='callout'><b>State.</b> Chicken counts and worker/bench populations are randomized once at startup, then remain stable. <code>O</code> pauses workers; brackets change work speed; <code>P</code> pauses the shared animation clock.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 8 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Village life and roadside shops</h1><table class='imagegrid three'><tr><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/18_tea_shop_timber_close.png' style='width:5.65cm' alt='Timber tea stall'/><div class='caption'>Figure 5a. Timber stall.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/07_tea_shop_brick.png' style='width:5.65cm' alt='Brick tea shop'/><div class='caption'>Figure 5b. Brick veranda shop.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/bamboo_sweep_4.png' style='width:5.65cm' alt='Bamboo roadside stall'/><div class='caption'>Figure 5c. Bamboo stall at the road edge.</div></td></tr></table>
+<h2>1. Three distinct shop variants</h2>
+<table class='inventory'>
+<tr><th>Variant</th><th>Identity and contents</th></tr>
+<tr><td>Timber stall</td><td>Board construction and tin-roof profile, open counter, sign, stocked shelves, cups/jars/kettle, bench/table seating, bicycle and customers.</td></tr>
+<tr><td>Brick shop</td><td>Compact masonry room with a veranda, framed openings, counter activity, seated tea group and warm window/veranda lighting.</td></tr>
+<tr><td>Bamboo stall</td><td>Raised bamboo floor and stilts, woven mat walls, deep thatched awning, bamboo counter, mud stove, lantern/string bulbs, bananas and seating.</td></tr>
+</table>
+<p><code>Village::drawRoadsideAmenities</code> places the three variants near the road. Static shells are cached; customers, steam, fire glow and electric lamps stay dynamic. Timber roof underside uses the code equation <code>y=4.24-0.80(z+2.8)/5.7</code>; bamboo roof center uses <code>y=4.9-1.2(z+2.6)/7.3</code>.</p>
+<h2>2. People, seating and small props</h2>
+<p>A common seat surface <code>Y=0.96</code> and hip <code>Y=1.12</code> align articulated people with benches, stools and split logs. Four roadside benches store 0-2 occupants in two-bit fields. Cups, trays, snack packets, kettle, biscuit jars, shelf stock, signboards, plants, bin and bicycle are separate transformed primitive groups, not textures.</p>
+<h2>3. Effects mathematics</h2><p>Steam life is <code>life=fract(0.22t+phase+0.2i)</code>; alpha is <code>0.26(1-life)min(1,6life)</code>, while horizontal sine drift and upward translation make each puff rise and fade. Fire glow intensity is <code>0.70+0.20sin(9t+x)+0.10sin(17t)</code>. Electric shop lamps additionally multiply by night and grid-power amounts.</p>
+<div class='callout'><b>Figure mapping.</b> 5a shows timber stock, counter, bench, villagers and bicycle; 5b shows the brick veranda/table group; 5c shows the bamboo stall on the right of the road.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 9 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Barn system: architecture and interior</h1><div class='center'><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/22_barn_entrance_clean.png' style='width:15.0cm' alt='Open barn and interior detail'/><div class='caption'>Figure 6. Accessible barn entrance showing sliding door, wheelbarrow, aisle, stalls, hay, trough and tools.</div></div>
+<h2>1. Shell / <code>Barn::draw</code></h2>
+<p>Four transformed instances reuse a 10 by 8 local footprint. Foundation, separate red wall panels/battens, gables, windows, side/hayloft doors and two 30-degree roof slabs leave a genuine front opening. Ridge height is <code>5.5+(5.0+0.5)tan(30 degrees)</code>; underside height at local X follows <code>ridge-|x|tan(30 degrees)</code>. Posts, tie beams and rafters use endpoint midpoint, length and <code>atan2</code> orientation.</p>
+<h2>2. Interior object inventory</h2>
+<table class='inventory'>
+<tr><td><b>Circulation</b></td><td>Clear central aisle, doorway threshold, sliding track and collision-aware opening.</td></tr>
+<tr><td><b>Animal areas</b></td><td>Side stalls, rails, dividers, feeding troughs and a hinged feeding gate.</td></tr>
+<tr><td><b>Storage</b></td><td>Hay bales/stacks and loft, shelving/items, sacks, ladder, hinged chest, workbench, tack wall and hand tools.</td></tr>
+<tr><td><b>Equipment</b></td><td>Moveable wheelbarrow/rotating wheel, bucket, stool, milk can and fenced outside area.</td></tr>
+<tr><td><b>Lighting</b></td><td>Exterior fixture and interior pendant lights whose emissive output and local-light contribution follow grid power.</td></tr>
+</table>
+<p>The cached static list holds unchanged architecture/content; sliding doors, chest lid, feeding gate, wheelbarrow and lamps render separately. Door translation is proportional to normalized open amount. Chest/gate apply hinge rotation <code>angle=maxAngle*openAmount</code>.</p>
+<h2>3. Instance state</h2><p>All four barns currently share the same mechanism values in <code>Scene</code>. One key therefore moves every corresponding prop. Figure 6 is a genuine open-door capture and clearly shows aisle, stalls, trough, bales, shelf/tools and wheelbarrow.</p><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 10 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Barn interaction, collision and power</h1><table class='imagegrid'><tr><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/23_barn_power_clean.png' style='width:8.65cm' alt='Barn with power on'/><div class='caption'>Figure 7a. Night, grid power on: exterior and interior warm illumination.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/24_barn_outage_clean.png' style='width:8.65cm' alt='Barn during outage'/><div class='caption'>Figure 7b. Same view after load shedding: electric fixtures and hay illumination fade.</div></td></tr></table>
+<h2>1. Interaction controls</h2>
+<table class='inventory'>
+<tr><td><code>G</code></td><td>Toggle all sliding barn doors. Door amount approaches the target smoothly at about 0.58 units/s.</td></tr>
+<tr><td><code>Z</code>/<code>X</code></td><td>Hold to move the wheelbarrow toward the entrance/rear. Travel is clamped to approximately −1.35…+1.10 and wheel spin follows distance.</td></tr>
+<tr><td><code>C</code></td><td>Toggle chest lid; a bounded scalar drives hinge rotation at about 1.25 units/s.</td></tr>
+<tr><td><code>F</code></td><td>Toggle feeding gate; its hinge parameter approaches the target at about 1.05 units/s.</td></tr>
+<tr><td><code>L</code></td><td>Toggle load shedding. A smoothed <code>powerAmount</code> fades grid-dependent lights rather than switching them discontinuously.</td></tr>
+</table>
+<h2>2. Door-aware camera collision</h2>
+<p>The scene transforms camera motion into each barn’s local coordinates, samples a long movement in smaller substeps, and rejects samples that intersect wall bands. The front wall is treated specially: its opening half-width grows with door animation, capped near 3.35 units. A closed door blocks the center; a sufficiently open door admits the camera. The resolved local point is transformed back to world space.</p>
+<p>Substepping uses <code>steps=ceil(travel/(0.14*barnScale))</code>, avoiding tunneling. For barn world offset <code>(wx,wz)</code>, rotation <code>r</code> and scale <code>s</code>, local position is <code>lx=(cos(r)wx-sin(r)wz)/s</code>, <code>lz=(sin(r)wx+cos(r)wz)/s</code>. Wall-band tests run in this reusable local frame.</p>
+<h2>3. Independent and dependent energy</h2>
+<p>Barn bulbs are grid-dependent. The power comparison above shows their emissive surfaces, interior visibility and local-light intensity fading together during an outage. Manual door/prop interactions remain available because they are not modeled as electrical actuators. Bonfires likewise remain lit; their flames and point lights are intentionally independent of the grid.</p>
+<div class='callout'><b>Current limitation.</b> Collision is implemented for barns only. Fences, trees, vehicles, shops, water and substation geometry remain non-solid to the camera.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 11 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Ponds, animated water and bridge</h1><table class='imagegrid'><tr><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/09_pond_bridge.png' style='width:8.65cm' alt='Wooden bridge over pond'/><div class='caption'>Figure 8a. Rural wooden bridge, layered bank and forest setting.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/17_main_pond_seating.png' style='width:8.65cm' alt='Pond wildlife and ripples'/><div class='caption'>Figure 8b. Water surface, duck, lily pads, reeds, stones and circular ripples.</div></td></tr></table>
+<h2>1. Pond composition</h2>
+<p>Three ponds break up the repeated farm grid. Each combines an irregular-looking layered soil/sand perimeter with water, stones, reeds and grass. The main and secondary sizes are parameterized (about 36 × 26 and 32 × 23 world units), while placement and surrounding details create distinct landmarks.</p>
+<p>The water is an eight-ring, 48-segment translucent polar mesh. At angle <code>a</code> and normalized radius <code>s</code>, <code>x=rx*edge(a)*s*cos(a)</code>, <code>z=rz*edge(a)*s*sin(a)</code>. Height/color shimmer uses <code>w1=sin(1.6t+1.4x+1.1z)</code> and <code>w2=sin(2.3t-0.9x+1.7z)</code>. Ripples expand from <code>radius=0.05+phase*0.14*min(rx,rz)</code> while alpha falls as <code>0.55(1-phase)</code>.</p>
+<h2>2. Bridge construction</h2>
+<p>The active bridge in <code>Pond.cpp</code> includes piles, side beams, 13 deck planks, posts and two sampled rails per side. Contrary to the earlier draft, it does <b>not</b> use a cubic Bezier. Its actual arch is:</p>
+<div class='formula'>z(t)=(2t-1)(0.47L), &nbsp; y(t)=base+rise*sin(pi*t), &nbsp; 0&lt;=t&lt;=1</div>
+<p>Twelve neighboring samples become boxes. Midpoint sets translation, <code>sqrt((Delta z)^2+(Delta y)^2)</code> sets length, and <code>-atan2(Delta y,Delta z)</code> sets X rotation. Ducks use elliptical paths <code>(rx*0.42 cos a,rz*0.40 sin a)</code>; velocity supplies heading. Lily pads bob by <code>0.004sin(1.2t+seed)</code>.</p>
+<h2>3. Render-state discipline</h2>
+<p>Opaque banks, rocks and bridge render with normal depth writes. The water/effects pass enables alpha blending and restores state afterward. Ripples sit slightly above the surface to avoid z-fighting. This ordering is important because legacy transparency does not automatically sort fragments.</p>
+<div class='callout'><b>Module distinction.</b> The standalone <code>Bridge.cpp</code> belongs to the inactive <code>FarmWorld</code> path. The bridge visible in Figures 8a–b is the independently implemented active bridge in <code>Pond.cpp</code>.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 12 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Electrical infrastructure and load shedding</h1><table class='imagegrid'><tr><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/03_substation.png' style='width:8.65cm' alt='Electrical substation close view'/><div class='caption'>Figure 9a. Fenced substation building, warning signs, conductors and equipment.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/02_overview_night.png' style='width:8.65cm' alt='Powered village at night'/><div class='caption'>Figure 9b. Powered night scene with road lamps and vehicle lighting.</div></td></tr></table>
+<h2>1. Substation / <code>PowerSubstation.cpp</code></h2>
+<p>The active fenced yard contains slab/gravel, operations building, roof equipment, door/windows/louvres, warning signs, stack, two transformers, fire walls, gantry, current/voltage transformers, surge arresters, bus and cable equipment, floodlights, generator, drums, kiosk, storage and earth straps. Gate mesh, tubes and beams are generated geometrically. A segment from A to B uses midpoint <code>(A+B)/2</code>, length <code>|B-A|</code> and an axis-angle alignment.</p>
+<h2>2. Distribution corridor</h2>
+<p>Utility poles repeat down both road sides. Crossarms and insulators support multiple conductors. Instead of straight lines, each wire span samples a parabolic sag term:</p>
+<div class='formula'>y(t) = (1−t)y<sub>0</sub> + ty<sub>1</sub> − 4s t(1−t)</div>
+<p>The factor <code>4t(1−t)</code> is zero at each pole and one at the midpoint, giving controllable maximum sag <code>s</code>. This inexpensive curve strongly improves depth and realism.</p>
+<h2>3. Dynamic equipment and load shedding</h2>
+<p>Roof fans rotate from animation time, beacons use <code>phase=fmod(t,1.5)</code>, and six stack-smoke puffs use <code>life=fract(raw)</code>, <code>radius=0.16+0.42life</code>, <code>alpha=0.70(1-life)</code>. <code>L</code> changes a target power state; <code>blend=1-exp(-5 DeltaT)</code> and <code>power+=(target-power)blend</code> smoothly fade electrical output.</p>
+<p>Road lamps, shop strings/lanterns where electrically modeled, farmhouse/barn fixtures and substation indicators scale with this value. Bonfires remain independent. The scene also applies restrained nighttime outage darkening to terrain so the visual story remains coherent without making the world unreadable.</p>
+<div class='callout'><b>Inactive alternative.</b> <code>PowerPlant.cpp</code> is compiled but not instantiated by the active <code>Scene</code>. It must not be confused with the visible <code>PowerSubstation</code>.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 13 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Sky, weather and environmental effects</h1><table class='imagegrid three'><tr><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/16_sun_birds.png' style='width:5.65cm' alt='Sun and clouds'/><div class='caption'>Figure 10a. Viewer-facing sun and cloud field.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/bonfire_sweep_0.png' style='width:5.65cm' alt='Bonfire and seated villager'/><div class='caption'>Figure 10b. Layered flame, stone ring and log seating.</div></td><td><img class='shot' src='file:///D:/4-1/3D_Farm_OpenGl/report_assets/screenshots/02_overview_night.png' style='width:5.65cm' alt='Moon and night environment'/><div class='caption'>Figure 10c. Moon, night fog and local illumination.</div></td></tr></table>
+<h2>1. Sky and celestial bodies</h2>
+<p>The sky is drawn with camera rotation but without translation, so it appears infinitely distant. Day color, night color and linear fog interpolate from the same day/night amount. The sun is a camera-facing disk with three restrained glow layers. It uses the same <code>DayNightSettings::SunPosition</code> as the directional light, preventing a common mismatch between visible sun and shading direction. Depth writes are disabled for the translucent glow.</p>
+<p>At night, a moon disk/crater treatment and deterministic star field fade in. <code>N</code> changes the target; <code>night=clamp(night +/- DeltaT/3,0,1)</code>. The sky view uses camera rotation but omits translation, so the dome/celestial bodies cannot be walked past.</p>
+<h2>2. Clouds and birds</h2><p><code>cloud.cpp</code> distributes 96 clouds uniformly over an annulus: <code>r=sqrt(rmin^2+u(rmax^2-rmin^2))</code>, <code>x=r cos a</code>, <code>z=r sin a</code>. Each moves by <code>p+=direction*speed*DeltaT</code> and wraps to the opposite rim. Day birds use <code>travel=fract(t/period+phase)</code>, V formations and <code>wing=32sin((5+0.35f)t+phase)</code>; a sparse night pair crosses the moon during 38% of a 22-second cycle.</p>
+<h2>3. Bonfire system</h2>
+<p>Five clearings are defined at fixed world positions. Each site contains a stone ring, crossed round logs, ash/embers, four layered drifting flame forms, two smoke puffs, five sparks and nearby villagers seated on split logs. <code>B</code> toggles all sites. At night, nearby active sites can contribute warm, flickering point lights to the ranked local-light set; their illumination is not tied to load shedding.</p>
+<p>Smoke/spark life is <code>fmod(rate*t+phase,1)</code>. Smoke rises to <code>y=1.55+2.4life</code>, expands and fades; sparks rise to <code>1+2life</code> with sine/cosine drift. Flame and selected local-light intensity use two sine frequencies. Villagers reuse the seated/standing human model. <code>B</code> toggles all sites.</p>
+<div class='callout'><b>Fog/transparency.</b> Linear fog blends distant trees toward the interpolated sky color. Clouds, glow, smoke, flames, water and light pools use alpha blending with explicit depth/state restoration.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 14 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Rendering, materials and lighting</h1><h2>1. Rendering pipeline</h2>
+<p>The application requests OpenGL 2.1 and uses the legacy compatibility pipeline: immediate-mode vertex submission, matrix stacks, fixed-function materials, <code>GL_LIGHTING</code>, fog and display lists. There are no GLSL programs, vertex/index buffers or vertex array objects. This makes the transformation and lighting model explicit for study, although it limits modern GPU efficiency.</p>
+<h2>2. Opaque and transparent passes</h2>
+<table class='architecture'>
+<tr><th>Stage</th><th>State and purpose</th></tr>
+<tr><td>Frame setup</td><td>Clear color/depth buffers; apply projection and view; configure fog and global light state.</td></tr>
+<tr><td>Sky</td><td>Camera translation removed; celestial glow uses blending and disabled depth writes where required.</td></tr>
+<tr><td>Opaque world</td><td>Depth test/write on; ground, road, buildings, farms, vegetation, props, characters and infrastructure.</td></tr>
+<tr><td>Local illumination</td><td>Select and configure up to seven additional point/spot lights around the camera.</td></tr>
+<tr><td>Transparent effects</td><td>Water, smoke, cloud layers, particles and projected light pools use source-alpha blending; state is restored.</td></tr>
+</table>
+<h2>3. Lighting equations applied to objects</h2>
+<p><code>GL_LIGHT0</code> is directional (<code>w=0</code>). Direction and ambient/diffuse/specular colors use <code>C=(1-n)Cday+nCnight</code>, where <code>n</code> is night amount. Fixed-function shading is conceptually <code>I=KaLa+KdLd max(N dot L,0)+KsLs max(R dot V,0)^shininess</code>. <code>N</code> is the supplied surface normal; <code>GL_NORMALIZE</code> repairs its length after scaled cows, trees, vehicles and buildings.</p>
+<p>Point/spot contribution falls by <code>1/(1+kL*d+kQ*d^2)</code>. Candidate farmhouse, shop, barn, road-lamp, bonfire and headlight sources are ranked by priority then squared camera distance; at most seven occupy <code>GL_LIGHT1...7</code>. Headlights also use spot direction/cutoff/exponent.</p>
+<h2>4. Visual approximations</h2>
+<table class='inventory'>
+<tr><td>Bulbs/flames</td><td>Emissive material makes a source look bright; selected sources also illuminate geometry.</td></tr>
+<tr><td>Light pools</td><td>Translucent ground geometry suggests spill beyond the small hardware-light budget.</td></tr>
+<tr><td>Water</td><td>Alpha, brightness variation and ripple geometry; no reflection/refraction render targets.</td></tr>
+<tr><td>Shadows</td><td>No active general shadow pass. Cows include a simple flattened dark contact shape; other depth cues come from lighting, overlap and fog.</td></tr>
+<tr><td>Textures</td><td>No active texture assets; surface identity is built from color/material and additional geometry.</td></tr>
+</table>
+<div class='callout'><b>Why the approach works.</b> The scene invests in silhouette, hierarchy, color contrast and secondary motion. Those choices produce recognisable objects even without textures or programmable shading.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 15 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Transformation, camera and projection mathematics</h1><h2>1. Model transformations</h2>
+<p>Vertices begin in local object coordinates. A typical hierarchy uses translation <code>T</code>, rotation <code>R</code> and scale <code>S</code>. With OpenGL’s post-multiplied matrix calls, a vertex is effectively evaluated as:</p>
+<div class='formula'>p<sub>world</sub> = T · R · S · p<sub>local</sub></div>
+<p>The practical order is therefore scale the primitive, rotate it into orientation, then place it in the parent/world. Nested <code>glPushMatrix</code>/<code>glPopMatrix</code> pairs establish a local coordinate frame for a farm, tractor, cow, villager, barn or shop and safely return to the parent afterward.</p>
+<h2>2. Camera basis</h2>
+<p>Let yaw be <code>ψ</code> and pitch be <code>θ</code>, converted to radians. The camera derives:</p>
+<div class='formula'>forward = (cosψ cosθ, sinθ, sinψ cosθ)<br/>right = (−sinψ, 0, cosψ)<br/>up = normalize(right × forward)</div>
+<p>The view matrix places the orthonormal basis in the current matrix and translates by the negative camera position. The sky view uses the same basis but omits translation. Keyboard walking intentionally uses only the horizontal heading <code>(cosψ, sinψ)</code>; looking upward never causes W/S to fly.</p>
+<p>Input axes are summed and the combined direction is normalized only when its length exceeds one. Thus diagonal vertical/forward movement is not faster. Position integration is direct:</p>
+<div class='formula'>position<sub>new</sub> = position<sub>old</sub> + direction · speed · Δt</div>
+<p>Base speed is 20 units/s; Left Shift multiplies by 3 and Left Ctrl by 0.3. Yaw changes at 90°/s from A/D or arrows, mouse sensitivity is 0.08°/pixel, pitch is clamped to ±89°, and yaw wraps into [−180°, 180°]. Frame time is capped at 0.25 s to contain focus/load spikes.</p>
+<h2>3. Perspective projection</h2>
+<p>For vertical field of view <code>f = 45°</code>, aspect <code>a = width/height</code>, near distance <code>n = 0.1</code> and far distance <code>F = 1000</code>:</p>
+<div class='formula'>top = n · tan(f/2), &nbsp; right = top · a; &nbsp; glFrustum(−right, right, −top, top, n, F)</div>
+<p>The framebuffer-size callback recomputes this projection after resize/fullscreen changes. A nonzero height guard prevents division by zero.</p>
+<h2>4. Frustum and distance culling</h2>
+<p>The scene multiplies projection and model-view matrices, extracts six planes using row 4 ± row 1/2/3, then normalizes them. A bounding sphere is outside when <code>plane·center + d &lt; −radius</code>. Squared distance tests avoid square roots for broad culling. Combined with fog, this prevents large off-screen/distant groups from consuming full draw cost.</p><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 16 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Simulation, curve and collision mathematics</h1><h2>1. Frame-rate-independent animation</h2>
+<p>Most linear state follows <code>x ← x + vΔt</code> and is clamped or wrapped. Periodic motion uses <code>sin(ωt + φ)</code>, where a deterministic phase <code>φ</code> desynchronizes instances. Smooth target following uses:</p>
+<div class='formula'>α = 1 − e<sup>−kΔt</sup>, &nbsp; x ← x + (target − x)α</div>
+<p>This exponential form is used for power and response values because it remains stable across frame rates. Day/night uses a bounded linear progression of about <code>Δt/3</code>. Global pause stops the shared animation progression; traffic and workers additionally expose subsystem pauses.</p>
+<h2>2. Vehicle and rotational motion</h2>
+<p>A steered vehicle advances along its heading <code>h</code> with <code>(Δx,Δz)=d(cos h,sin h)</code>. Wheel angle is tied to traveled distance, conceptually <code>Δangle = 180d/(πr)</code> degrees. Barn wheelbarrow code uses an equivalent calibrated factor near 150.78° per travel unit. Road vehicles add <code>speed×Δt</code> on their route and wrap only while preserving safe spacing.</p>
+<h2>3. Procedural distribution</h2>
+<p>Stable integer/hash seeds derived from chunk, farm or object coordinates choose placement jitter, scale, cow coat layout, timing phase and vegetation. Startup RNG chooses chicken counts, balanced worker populations and bench occupancy once. World grass is generated in 40-unit chunks and rejected by analytical road, path, building, pond and fire-clearance regions.</p>
+<h2>4. Curves and particles</h2>
+<table class='inventory'>
+<tr><td>Active bridge rail</td><td><code>z(t)=(2t-1)0.47L</code>, <code>y(t)=base+rise sin(pi t)</code>; samples form oriented boxes. The cubic Bezier in standalone <code>Bridge.cpp</code> belongs to inactive <code>FarmWorld</code>.</td></tr>
+<tr><td>Wire sag</td><td>Linear endpoint interpolation minus <code>4s t(1−t)</code>.</td></tr>
+<tr><td>Particle life</td><td><code>life = fract(rate×time + phase)</code>; smoke rises/expands and alpha falls with life; sparks combine upward life with sine drift.</td></tr>
+<tr><td>Viewer-facing disks</td><td>Sun/moon geometry is rotated toward the current view so a thin disk remains legible.</td></tr>
+</table>
+<h2>5. Barn collision transform</h2>
+<p>For a barn translated/rotated/scaled in world space, camera offset is inverse-rotated and divided by scale:</p>
+<div class='formula'>l<sub>x</sub> = (cosr·w<sub>x</sub> − sinr·w<sub>z</sub>)/s, &nbsp; l<sub>z</sub> = (sinr·w<sub>x</sub> + cosr·w<sub>z</sub>)/s</div>
+<p>Local wall bands and the animated opening can then be tested with simple comparisons. The accepted point is rotated/scaled back. This is cheaper and clearer than testing world-space triangles and naturally reuses one collider for every transformed barn.</p>
+<div class='callout'><b>Numerical care.</b> Capping Δt, clamping bounded states, wrapping angles/routes, normalizing vectors/planes, and subdividing long collision motion prevent common instability and tunneling problems.</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 17 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Complete control reference</h1><table class='controls'>
+<tr><th>Input</th><th>Action</th><th>Scope / behavior</th></tr>
+<tr><td><code>W / S</code></td><td>Move forward / backward</td><td>Horizontal camera heading; frame-time integrated.</td></tr>
+<tr><td><code>A / D</code></td><td>Yaw left / right</td><td>Rotates in place; can be combined with W/S.</td></tr>
+<tr><td><code>Q / E</code></td><td>Move up / down</td><td>Vertical camera translation.</td></tr>
+<tr><td><code>Left Shift</code></td><td>Sprint</td><td>3.0× camera speed while held.</td></tr>
+<tr><td><code>Left Ctrl</code></td><td>Precision move</td><td>0.3× camera speed while held.</td></tr>
+<tr><td><code>Mouse / click / Tab</code></td><td>Look / capture cursor</td><td>Click or Tab captures; mouse changes yaw/pitch. Tab toggles.</td></tr>
+<tr><td><code>Arrow keys</code></td><td>Keyboard look</td><td>Left/right yaw; up/down pitch.</td></tr>
+<tr><td><code>R</code></td><td>Reset camera</td><td>Returns to (0,4,10), yaw −90°, pitch −15°.</td></tr>
+<tr><td><code>I / K</code></td><td>Tractor forward / reverse</td><td>Manual farm tractor.</td></tr>
+<tr><td><code>J / ;</code></td><td>Tractor steer left / right</td><td>Manual tractor heading.</td></tr>
+<tr><td><code>N</code></td><td>Toggle day / night</td><td>Smooth scene-wide transition.</td></tr>
+<tr><td><code>T</code></td><td>Pause / resume traffic</td><td>Only the road tractor convoy.</td></tr>
+<tr><td><code>B</code></td><td>Toggle bonfires</td><td>All five sites, effects and eligible local lights.</td></tr>
+<tr><td><code>G</code></td><td>Open / close barn doors</td><td>Shared by all four barns; collision follows door amount.</td></tr>
+<tr><td><code>Z / X</code></td><td>Move wheelbarrow</td><td>Held input toward entrance / rear, bounded travel.</td></tr>
+<tr><td><code>C</code></td><td>Toggle barn chest</td><td>Shared lid state.</td></tr>
+<tr><td><code>F</code></td><td>Toggle feeding gate</td><td>Shared hinge state.</td></tr>
+<tr><td><code>L</code></td><td>Toggle load shedding</td><td>Fades grid-dependent illumination.</td></tr>
+<tr><td><code>O</code></td><td>Pause / resume crop workers</td><td>Independent field-work control.</td></tr>
+<tr><td><code>[ / ]</code></td><td>Decrease / increase work speed</td><td>Target constrained to 0.35…2.50 in 0.25 steps.</td></tr>
+<tr><td><code>P</code></td><td>Pause / resume all animation</td><td>Global animation state.</td></tr>
+<tr><td><code>− / +</code></td><td>Windmill speed down / up</td><td>Adjusts rotor animation response.</td></tr>
+<tr><td><code>V</code></td><td>Toggle VSync</td><td>Updates GLFW swap interval and title status.</td></tr>
+<tr><td><code>F11</code></td><td>Toggle fullscreen</td><td>Restores prior windowed size/position.</td></tr>
+<tr><td><code>Esc</code></td><td>Release / exit</td><td>First press releases captured mouse; next closes.</td></tr>
+</table>
+<h2>Interaction matrix</h2>
+<table class='matrix'>
+<tr><th>System</th><th>Global pause P</th><th>Power L</th><th>Day/night N</th><th>Independent switch</th></tr>
+<tr><td>Traffic</td><td>Paused</td><td>Headlight intensity context</td><td>Lights become visible</td><td><code>T</code></td></tr>
+<tr><td>Crop workers</td><td>Paused</td><td>No direct dependency</td><td>Lighting only</td><td><code>O</code>, <code>[ ]</code></td></tr>
+<tr><td>Bonfires</td><td>Effect animation pauses</td><td>Independent</td><td>Light most visible at night</td><td><code>B</code></td></tr>
+<tr><td>Barn props</td><td>State approach follows scene update</td><td>Mechanisms remain usable</td><td>Visibility changes</td><td><code>G Z X C F</code></td></tr>
+</table><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 18 OF 20</span></div></section>
+<section class='page'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Performance, testing and limitations</h1><h2>1. Implemented optimization</h2>
+<table class='architecture'>
+<tr><th>Technique</th><th>Where it helps</th></tr>
+<tr><td>Display lists</td><td>Cache ground/road, farms, vegetation, shop shells, drivers, cloud forms, barns and substation static geometry.</td></tr>
+<tr><td>Frustum + distance culling</td><td>Rejects farms, 225-unit trees, 90-unit world grass, 155-unit fires and other groups before detailed drawing.</td></tr>
+<tr><td>Level of detail</td><td>Simplifies distant trees, drivers and clouds.</td></tr>
+<tr><td>Chunked procedural detail</td><td>Generates/culls world grass locally while preserving exclusion regions.</td></tr>
+<tr><td>Local-light ranking</td><td>Chooses the best seven candidates rather than enabling every visible source.</td></tr>
+<tr><td>Timing safeguards</td><td>0.25 s Δt cap, VSync option, and event waiting while minimized.</td></tr>
+</table>
+<h2>2. Measured runtime and validation</h2>
+<p>A final 10-second instrumented run in the available review environment, after a five-second warmup with VSync disabled, reported <b>6.42 FPS / 155.852 ms per frame</b>. The workload is CPU-heavy because it submits large volumes of immediate-mode geometry; the value is environment-specific and is not a universal hardware benchmark.</p>
+<p>The Release build succeeded. <code>CameraControlTests</code> passed 1/1 and covers heading-relative movement, opposing-key cancellation, yaw wrapping, immediate stopping, simultaneous curved motion and mouse/keyboard yaw continuity. It does not test drawing, scene toggles, collision or visual output. Manual smoke validation covered startup, windowed/fullscreen/restore/resize, day/night, power, barn interaction and clean exit.</p>
+<h2>3. Known limitations and maintenance notes</h2>
+<ul class='compact'>
+<li>Legacy immediate mode and display lists limit performance and portability relative to modern buffered rendering.</li>
+<li>No active shaders, texture mapping, general shadow maps, reflections, refraction, skeletal animation or physics engine.</li>
+<li>Camera collision applies only to barns; all other geometry can be traversed.</li>
+<li>All barn instances share one interaction state rather than per-barn state.</li>
+<li>Startup randomization means worker/chicken/bench occupancy varies between launches, though it remains stable within one run.</li>
+<li><code>FarmWorld</code>, standalone bridge/power plant/texture manager, <code>Shadow</code>, and several helper paths are inactive or dead code.</li>
+<li><code>farmworld.cpp</code> includes <code>FarmWorld.h</code> while the repository filename is <code>farmworld.h</code>; this is a case-sensitive-platform hazard.</li>
+<li><code>.gitignore</code> matches <code>test*</code>; the present <code>tests/CameraControlTests.cpp</code> is locally available and referenced by CMake, but clean-clone tracking should be checked.</li>
+<li>README contains stale phase and cloud-offset statements; current code is authoritative.</li>
+</ul>
+<h2>4. Recommended next steps</h2>
+<p>Highest-value improvements are modern VBO/VAO + shader rendering, batched/instanced repeated geometry, per-barn state, broader collision, transparent-object sorting, expanded automated scene-state tests, and cleanup of inactive modules/case-sensitive includes. A profiling pass should precede aesthetic expansion.</p><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 19 OF 20</span></div></section>
+<section class='page last'><div class='running'>3D FARM OPENGL &nbsp; / &nbsp; PROJECT REPORT</div><h1>Conclusion, viva notes and references</h1><h2>1. Conclusion</h2>
+<p>The current 3D_farm_OpenGL repository demonstrates a complete interactive scene rather than a collection of disconnected models. Its strongest achievement is integration: reusable primitive-based objects operate inside one navigable world; transforms support twelve varied farm instances; animation connects animals, people, vehicles, water and weather; day/night and power states affect a shared lighting model; and targeted collision makes the barn a genuinely enterable environment.</p>
+<p>The project also exposes important engineering tradeoffs. Fixed-function OpenGL makes matrices, lights and materials easy to inspect, but the high immediate-mode submission cost is visible in the benchmark. Stylized geometric effects keep dependencies small, but cannot supply the realism of textured shader pipelines. Documenting those facts strengthens the project: it shows a clear understanding of what was implemented, how it works, and what should change next.</p>
+<h2>2. Short viva / demonstration guide</h2>
+<ol class='compact'>
+<li>Begin at the road and explain the <code>Application → Scene → object modules</code> frame path.</li>
+<li>Use W/S, A/D and mouse look; derive the forward vector and show movement is frame-time based.</li>
+<li>Toggle <code>N</code> and identify the shared sun direction, sky/fog interpolation and local night lights.</li>
+<li>Visit a barn; use <code>G</code>, enter through the animated collider, then demonstrate <code>Z/X</code>, <code>C</code> and <code>F</code>.</li>
+<li>Toggle <code>L</code> at night and contrast powered fixtures with grid-independent bonfires.</li>
+<li>Show traffic/work subsystem controls and explain display lists, frustum/distance culling, LOD and the seven-light ranking.</li>
+<li>Close by distinguishing active <code>Pond</code> bridge and <code>PowerSubstation</code> from compiled-but-unused legacy modules.</li>
+</ol>
+<h2>3. Repository references (source of truth)</h2>
+<table class='references'>
+<tr><td>[1]</td><td><code>CMakeLists.txt</code>; build targets, C++ standard, GLFW/OpenGL linkage and test registration.</td></tr>
+<tr><td>[2]</td><td><code>src/main.cpp</code>, <code>src/Application.cpp</code>, <code>src/Input.cpp</code>; lifecycle, callbacks, window modes and input state.</td></tr>
+<tr><td>[3]</td><td><code>src/Camera.cpp</code>, <code>src/Scene.cpp</code>, <code>src/Animation.cpp</code>, <code>src/Lighting.cpp</code>; camera mathematics, orchestration, simulation and lighting.</td></tr>
+<tr><td>[4]</td><td><code>src/graphics/Primitives.cpp</code>; reusable compatibility-mode drawing primitives.</td></tr>
+<tr><td>[5]</td><td><code>src/objects/Animals.cpp</code>, <code>Farmer.cpp</code>, <code>Tractor.cpp</code>, <code>Vegetation.cpp</code>, <code>Farmhouse.cpp</code>, <code>windmill.cpp</code>; farm actors and objects.</td></tr>
+<tr><td>[6]</td><td><code>src/objects/Barn.cpp</code>, <code>Village.cpp</code>, <code>Pond.cpp</code>, <code>PowerSubstation.cpp</code>; major interactive landmarks and amenities.</td></tr>
+<tr><td>[7]</td><td><code>src/objects/sky.cpp</code>, <code>cloud.cpp</code>, <code>Birds.cpp</code>; sky and atmospheric content.</td></tr>
+<tr><td>[8]</td><td><code>include/DayNightSettings.h</code>, <code>include/VillageSimulationSettings.h</code>; shared constants and simulation parameters.</td></tr>
+<tr><td>[9]</td><td><code>tests/CameraControlTests.cpp</code>; automated camera control coverage.</td></tr>
+<tr><td>[10]</td><td><code>README.md</code>, <code>LICENSE</code>; project identity, historical description and MIT licensing.</td></tr>
+</table>
+<div class='signoff'>END OF REPORT &nbsp; · &nbsp; EXACTLY 20 PAGES &nbsp; · &nbsp; SOURCE-VERIFIED</div><div class='footer'><span>Niloy Chowdhury &nbsp; | &nbsp; Roll 2107117</span><span>PAGE 20 OF 20</span></div></section></body></html>

@@ -1,269 +1,127 @@
-# Animated 3D Farm Scene with Lighting and Transformations
+# Animated 3D Farm Scene
 
-Student: Niloy Chowdhury  
-Roll: 2107117
+A real-time interactive rural environment built with C++17, GLFW, and the OpenGL 2.1 compatibility pipeline. The project presents a populated farm village with reusable procedural models, first-person exploration, dynamic day/night lighting, traffic, workers, animals, weather effects, interactive barns, ponds, bonfires, and electrical load shedding.
 
-This project is being built incrementally with C++, GLFW, and legacy OpenGL compatibility rendering. The current scaffold provides:
+**Author:** Niloy Chowdhury
 
-- GLFW application lifecycle
-- 3D perspective projection
-- Depth testing
-- Interactive camera movement
-- Centralized keyboard state tracking
-- Scene ownership and frame updates
-- A 3D ground plane and verification grid
-- A reference cube rendered with a model transformation
-- Mouse-look camera rotation
-- Heading-relative first-person movement with W/S, A/D turning, and Q/E vertical controls
-- Ambient, diffuse, and specular lighting for the 3D scene
-- Extended terrain, road, and utility lines for a fake infinite-world horizon
-- Phase 2 farm ground, crop region, and boundary fence
-- Phase 3 low-polygon farmhouse built from OpenGL primitives
-- Phase 4 reusable trees and repeated crop instances
-- Phase 5 entrance gate, farmhouse pathway, and simple environmental rocks
-- Phase 6 low-polygon manually controlled tractor
-- Phase 8 sun and smoothly moving cloud groups
-- Static grazing cows built from low-polygon primitives
-- Twelve transformed copies of the complete farm arranged along a central road
-- Animated farmers walking only along the central road
-- A dense sky field of enlarged drifting clouds distributed across the horizon
-- A rural electrical substation with fenced transformers and sagging power lines
-- Utility poles and sagging power lines running along both sides of the main road
-- Per-farm layout variation with different tree, animal, tractor, and windmill arrangements
-- Very dense, enlarged forest belts and clusters throughout the complete open world while keeping the road clear
-- Very dense world-wide tree scattering includes roadside belts while landmark and farm footprints remain clear
-- Three detailed, driver-occupied tractors circulating on the central road
-- Evenly spaced road traffic with a pause/resume control
-- Detailed rural barns with roofs, doors, beams, hay, fences, and equipment
-- Enlarged world objects and landmarks for a fuller visual composition
-- Farmers tending the crop rows with repeated walking and working motions
-- Ponds with animated water, natural edges, reeds, rocks, grass, and a wooden bridge
+**Roll:** 2107117
 
-## Phase 2 Environment
+**License:** MIT
 
-The farm uses a simple world-coordinate layout:
+![Daytime overview of the animated farm village](Screenshots/top_view.png)
 
-- Grass: 60 x 60 ground plane centered at `(0, 0, 0)`
-- Crop field: translated toward negative Z, rotated by `-3` degrees, and scaled from a reusable plane
-- Boundary: cube-based fence around approximately `x = -24..24`, `z = -19..19`
-- Transformation marker: a red cube at `(-14, 1, 8)` with visible translation, rotation, and non-uniform scaling
+## Table of contents
 
-The crop field contains only farmland rows for visual organization. No crops, tractor, windmill, trees, or animation have been added yet.
+- [Project overview](#project-overview)
+- [Feature highlights](#feature-highlights)
+- [Technology and requirements](#technology-and-requirements)
+- [Build and run](#build-and-run)
+- [Controls](#controls)
+- [Architecture](#architecture)
+- [Scene systems](#scene-systems)
+- [Rendering and performance](#rendering-and-performance)
+- [Configuration](#configuration)
+- [Testing and benchmarking](#testing-and-benchmarking)
+- [Project structure](#project-structure)
+- [Known limitations](#known-limitations)
+- [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
 
-## Phase 3 Farmhouse
+## Project overview
 
-The farmhouse is implemented in [Farmhouse.cpp](src/objects/Farmhouse.cpp) and uses separate functions for its body, two-part roof, door, windows, chimney, and porch. It is placed near `(10, 0, 7)` using world coordinates. Each component demonstrates translation, rotation, and scaling through the legacy OpenGL model matrix stack.
+The application creates a large stylized farm and village entirely from reusable OpenGL primitives. It does not depend on downloaded 3D models or a texture pack. Houses, barns, tractors, people, animals, crops, trees, shops, utility infrastructure, ponds, bridges, and environmental effects are assembled hierarchically from cubes, planes, cylinders, and spheres.
 
-## Phase 4 Trees and Crops
+The current scene contains:
 
-Vegetation is implemented in [Vegetation.cpp](src/objects/Vegetation.cpp). `drawTree(x, z, scale)` builds each tree hierarchically from one trunk and three crown cubes. `drawCrop(x, z, scale)` builds each crop from a stem and two rotated leaves. The scene reuses these functions for six trees and 42 crops, with translated positions and small scale variations instead of duplicating geometry definitions.
+- 12 varied farm plots arranged on both sides of a central rural road.
+- Three moving road tractors with seated drivers, wheel animation, and night headlights.
+- A separate manually controlled tractor.
+- Farmhouses, crop rows, fences, gates, paths, windmills, barns, and tea shops.
+- Animated cows, chickens, crop workers, road pedestrians, villagers, and birds.
+- Three animated ponds, including an active wooden bridge implemented in `Pond.cpp`.
+- A power substation, roadside poles, suspended conductors, lamps, and load shedding.
+- Five bonfire gathering sites with villagers, logs, stones, flames, embers, smoke, and sparks.
+- A smoothly interpolated day/night system with sun, moon, stars, clouds, fog, moonlight, warm local lights, and power-dependent illumination.
 
-## Phase 5 Fence Details
+The visual style deliberately favors readable low-polygon silhouettes and hierarchical transformations. This keeps the implementation suitable for learning classic computer-graphics concepts while still supporting a substantial interactive scene.
 
-The existing perimeter fence now has an entrance opening on the front side at approximately `x = 10`. Two gate panels use translated, scaled, and rotated fence rails. A simple brown pathway begins at the gate and leads toward the farmhouse, while four small cube-based rocks add environmental detail without introducing textures or external models.
+## Feature highlights
 
-## Phase 6 Tractor
+### Exploration and window handling
 
-The tractor is implemented in [Tractor.cpp](src/objects/Tractor.cpp). Its complete model is drawn under one root translation stored in `position_[3]`. The body, engine, cabin, roof, axles, wheels, and exhaust use local transforms relative to that root. Manual movement uses `I`/`K` to drive and `J`/`;` to steer; wheel rotation changes only while the tractor is being moved.
+- Heading-relative first-person movement with delta-time integration.
+- `W` and `S` follow the camera's current horizontal heading.
+- `A` and `D` turn the camera in place instead of orbiting or strafing.
+- Mouse look and keyboard look update the same yaw/pitch orientation.
+- Smooth combined movement and turning, including `W+A`, `W+D`, `S+A`, and `S+D`.
+- Opposing inputs cancel predictably, and held inputs are cleared when focus is lost.
+- Separate vertical movement, sprint, and precision-speed controls.
+- Resizable window with framebuffer-aware viewport and projection updates.
+- Fullscreen transitions preserve the previous windowed position and dimensions.
+- Runtime VSync control and live FPS/frame-time reporting in the title bar.
 
-## Phase 8 Sky and Clouds
+### Environment and village life
 
-The sky is a camera-centred gradient dome. The sun in
-[sky.cpp](src/objects/sky.cpp) is a viewer-facing distant disk with a soft,
-restrained glow; it shares `DayNightSettings::SunPosition` with the daylight
-direction, fades through the day/night transition, and never writes scene
-depth. Each cloud in [cloud.cpp](src/objects/cloud.cpp) is a small hierarchy of
-overlapping spheres.
+- Deterministic placement for the road, farms, landmarks, utility corridor, ponds, forest belts, and bonfire clearings.
+- Reusable farm layouts with varied houses, crops, trees, animals, tractors, chickens, and windmills.
+- Three distinct roadside tea-shop designs: timber, brick, and bamboo.
+- Roads include shoulders, dashed center markings, entrance gaps, and subtle weathering patches.
+- Grass, flowers, flowering shrubs, and flowering trees respect exclusion zones around roads, buildings, paths, ponds, and fires.
+- Benches, stools, split-log seats, bicycles, counters, shelves, cups, kettles, signs, and other village props add environmental detail.
 
-Cloud translation is controlled by `Animation::cloudOffset()`. Every frame, `Animation::update(deltaTime)` increases the offset by `0.8 * deltaTime`, so movement remains smooth and frame-rate independent. When the offset passes `28`, it wraps to `-28`, keeping clouds inside a repeating world-space range without accumulating an unbounded position.
+### Animation and interaction
 
-## Animals
+- Frame-rate-independent vehicle, pedestrian, worker, cloud, bird, water, windmill, fire, and animal animation.
+- Traffic can be paused independently without destroying convoy spacing.
+- Field-worker animation can be paused or speed-adjusted independently.
+- The global animation clock can be paused while day/night transitions continue.
+- Barn doors, feeding gates, storage chests, and wheelbarrows are interactive.
+- Closed barn doors participate in camera collision; open doors allow entry.
+- Cows graze, chew, blink, flick their ears and tails, and occasionally raise their heads.
+- Chickens walk and peck; villagers use varied idle and conversation gestures.
 
-[Animals.cpp](src/objects/Animals.cpp) provides the reusable animated cow.
-Each cow has a proportioned barrel, chest and rump, individual hide markings,
-articulated grazing neck, muzzle, ears, horns, blinking eyes, grounded legs,
-cloven hooves, udder and fly-swatting tail. Cows use position-derived timing so
-they lower their heads, chew, flick their ears and occasionally look up at
-different times; all motion comes from the shared frame-rate-independent scene
-clock.
+### Lighting and atmosphere
 
-## Multiple Farms and Road
+- Three-second day/night crossfade controlled from centralized settings.
+- Directional daylight transitions into cool moonlight.
+- Warm farmhouse, shop, barn, street, substation, bonfire, and vehicle lighting.
+- The seven available secondary fixed-function lights are ranked by camera distance and importance before use.
+- Independent power-outage behavior: electric fixtures fade, while moonlight, stars, bonfires, and headlights remain available.
+- Windmills coast to a stop during load shedding and accelerate smoothly when power returns.
+- Linear fog and camera-centered sky rendering hide the world boundary and improve depth perception.
 
-The complete existing farm layout is rendered twelve times without changing the
-farmhouse, tractor, windmill, vegetation, animal, fence, or rock definitions.
-Each copy uses the same geometry and colors under a uniform world transform.
-The copies are arranged in six rows on both sides of a central road, and the
-ground is expanded to provide room for the full layout. The farms use enlarged
-uniform transforms and wider row spacing so neighboring farms have more room
-around their fences, crops, and equipment.
+## Technology and requirements
 
-## Farmers
+### Core technology
 
-Farmers are reusable low-polygon characters animated by the scene update loop.
-They travel only along the central road in a larger group with different
-positions, speeds, and walking phases. Their walking limbs swing while moving,
-and the existing `P` pause control pauses their movement along with the other
-scene animations.
+| Component | Use |
+|---|---|
+| C++17 | Application, simulation, scene management, and procedural models |
+| OpenGL 2.1 compatibility profile | Fixed-function transforms, lighting, fog, materials, blending, and immediate-mode geometry |
+| GLFW 3 | Window creation, OpenGL context, keyboard/mouse input, timing, fullscreen, and VSync |
+| CMake 3.16 or newer | Primary build system |
+| CTest | Deterministic camera-control test registration and execution |
 
-## Farm Variation
+### Required development tools
 
-The twelve farms use deterministic scene-level layouts instead of identical
-copy-pasted arrangements. Each layout can have two to five trees, zero to two
-cows, an optional tractor, an optional windmill, and small independent offsets
-for the crop field and farmhouse. The reusable object implementations and
-their colors remain unchanged.
+- A C++17 compiler.
+- CMake 3.16 or newer.
+- OpenGL development libraries and a driver supporting the OpenGL 2.1 compatibility profile.
+- GLFW 3 with a discoverable CMake package configuration.
 
-## Road Tractors
+The validated Windows configuration uses the MSYS2 UCRT64 toolchain:
 
-The existing detailed tractor model is reused for road traffic rather than
-duplicated. Three scaled road tractors circulate along the central road in red,
-green, and blue body variants. Every road vehicle contains a seated driver
-using the shared articulated villager model. The original manually controlled
-farm tractor remains available with `I`/`K` and `J`/`;`.
+- `C:\msys64\ucrt64\bin\g++.exe`
+- `C:\msys64\ucrt64\bin\mingw32-make.exe`
+- `C:\msys64\ucrt64\lib\cmake\glfw3`
 
-Three road tractors form a continuously wrapped convoy. They share one speed
-and start 72 world units apart, so wrapping cannot cause a vehicle to respawn
-on top of another vehicle. `T` pauses or resumes traffic without changing its
-spacing. The roadside population was reduced to four possible pedestrians,
-only two of which start active. Longer waiting intervals and a guarded entry
-point prevent repetitive, overlapping pedestrian arrivals.
+The CMake build is intended to remain portable, but the supplied convenience scripts link Windows system libraries and therefore target Windows/MSYS2.
 
-## Barns
+## Build and run
 
-Four rural barns are placed around the outer farm areas. Each is now a real
-wall shell rather than a solid box, with an accessible front opening, visible
-two-sided roof, packed-earth timber floor, posts, tie beams, roof supports,
-side stalls, feeding troughs, a clear centre aisle, hay, shelves and hanging
-tools. The front doors slide along an overhead track and camera collision
-follows their animated opening, so a closed door blocks entry and an open one
-admits the camera. Exterior and pendant lights provide warm night illumination
-and fade with load shedding.
+### Recommended: CMake with MSYS2 UCRT64 on Windows
 
-Three manual interior interactions share the barn architecture: a bounded
-wheelbarrow with matching wheel rotation, a hinged storage chest, and a hinged
-feeding gate. Their animations reverse smoothly and remain usable without
-grid power. Several barns also retain their surrounding fence.
-
-Each farm receives a stable random population of zero to three crop workers at
-startup. Crop workers move between nearby crop rows, pause their walking, and
-continue with slower working motions so they appear to tend the plants rather
-than travel on the road. `O` independently pauses field work, while `[` and
-`]` decrease or increase work speed.
-
-## Ponds and Wooden Bridge
-
-Three ponds are placed around the farms. Each pond has a sandy soil edge,
-rocks, reeds, grass, translucent water, and animated brightness variation.
-The larger pond includes a rural wooden bridge with a deck, supports, posts,
-side railings, and a curved top rail.
-
-The bridge railing is sampled from a cubic Bezier curve. The implementation
-keeps the full curve equation in `src/objects/Pond.cpp` as a course-project
-comment and uses the sampled points to create connected wooden rail segments.
-
-## Environment and Bonfires
-
-Ground and road colours now respond to the day/night transition, with an
-additional restrained darkening during a nighttime power outage. The full
-road has segmented centre markings, entrance gaps, dirt shoulders, and subtle
-flat weathering patches placed above the surface to avoid z-fighting.
-
-Deterministic, chunk-culled grass fills suitable open terrain. Farm entrances,
-roads, paths, structures, ponds, and fire clearings remain unobstructed.
-Flowers around houses, flowering shrubs, and flowering trees add colour using
-cached low-polygon geometry.
-
-Five bonfire clearings contain stone rings, crossed logs, embers, animated
-flames, restrained smoke and sparks, and small groups of shared articulated
-villagers. Their warm night lights remain independent of grid power. `B`
-toggles all bonfire sites without affecting traffic or other animation.
-All reusable benches, stools and split-log seats share one seat-surface height;
-the seated pelvis, thighs, knees and grounded feet are authored against that
-height so idle gestures do not push bodies through the furniture.
-
-## Controls
-
-- `W`, `S`: move forward/backward relative to the camera's current heading
-- `A`, `D`: turn left/right in place (hold with `W` or `S` for curved movement)
-- `Q`, `E`: move vertically
-- `Left Shift`: move faster
-- `Left Ctrl`: move slowly for precise positioning
-- Left click or `Tab`: capture/release the mouse; move the mouse to look
-- Arrow keys: rotate the camera as an alternative
-- `R`: reset the camera
-- `I`, `K`: drive the tractor forward/backward
-- `J`, `;`: steer the tractor left/right while driving (`L` controls grid power)
-- `N`: toggle day/night mode (one toggle per key press)
-- `T`: pause/resume road traffic (one toggle per key press)
-- `B`: show/hide the five bonfire gatherings (one toggle per key press)
-- `G`: open/close all barn sliding doors (one toggle per key press; reversible)
-- `Z`, `X`: roll the barn wheelbarrow toward the entrance/rear while held
-- `C`: open/close the barn storage chest (one toggle per key press)
-- `F`: open/close the barn feeding gate (one toggle per key press)
-- `L`: toggle load shedding; grid lights switch and windmills coast to a stop
-- `O`: pause/resume crop workers independently
-- `[`, `]`: decrease/increase crop-worker animation speed
-- `P`: pause/resume all scene animation
-- `+`, `-`: adjust windmill speed
-- `F11`: toggle fullscreen while preserving the windowed size and position
-- `V`: toggle vertical synchronization
-- `Esc`: release a captured mouse; press again to exit
-
-The title bar reports current FPS, frame time, V-sync state, and window mode.
-It also reports grid-power, traffic, bonfire, and worker-pause state.
-W/S movement follows the camera heading and stays parallel to the ground even
-while looking up or down. Opposing movement or turn keys cancel each other.
-
-Night mode transitions smoothly over three seconds and adds a moon, stars,
-darker clouds, moonlight, warm building/street lighting, and headlights that
-follow the moving road tractors. The transition continues while scene
-animation is paused. Visual and timing constants—including the transition
-duration, sky/fog colors, global light levels, and lamp colors—are centralized
-in `include/DayNightSettings.h`.
-
-Load shedding is independent of day/night mode: moonlight, stars, and vehicle
-headlights remain available, while farmhouse, shop, barn, substation, and road
-lighting lose grid power. Windmills decelerate and restart smoothly. Village
-simulation tuning (population limits, work speed, traffic spacing, power fade,
-and pond sizes) is centralized in `include/VillageSimulationSettings.h`.
-
-The village environment also includes enlarged traditional windmills, varied
-farm grass, larger animated ponds, pond and roadside seating, three individual
-tea shops with animated customers, and frame-rate-independent bird flocks.
-During full night, daytime flocks fade out and an occasional distant pair
-crosses the moon. Cows alternate between grazing and briefly raising their
-heads; all ambient motion follows the shared pausable scene clock.
-
-## Phase 1 Run Script
-
-On Windows with the existing MSYS2 UCRT64 GLFW installation, run this from PowerShell:
-
-```powershell
-.\run_phase1.ps1
-```
-
-The script compiles all files under `src/` into `build/Phase1Farm.exe`, adds the local GLFW DLL directory to `PATH`, and launches the program.
-
-For Git Bash, run:
-
-```bash
-cd /d/4-1/3D_Farm_OpenGl
-chmod +x run_phase1.sh
-./run_phase1.sh
-```
-
-The script compiles with the MSYS2 UCRT64 GLFW installation and launches the Phase 2 environment.
-
-## Build
-
-The included `CMakeLists.txt` expects GLFW to be available through a CMake package configuration and OpenGL to be available from the platform.
-
-```text
-cmake -S . -B build
-cmake --build build
-```
-
-For the MSYS2 UCRT64 toolchain on Windows, a complete Release build is:
+From PowerShell in the repository root:
 
 ```powershell
 cmake -S . -B build-cmake -G "MinGW Makefiles" `
@@ -271,34 +129,357 @@ cmake -S . -B build-cmake -G "MinGW Makefiles" `
   -DCMAKE_PREFIX_PATH=C:/msys64/ucrt64 `
   -DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe `
   -DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/mingw32-make.exe
+
 cmake --build build-cmake -j 4
+
 $env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
 .\build-cmake\Animated3DFarmScene.exe
 ```
 
-The CMake build also includes deterministic camera-control checks:
+The initial window size is 1280 x 720. The window can be resized down to 640 x 360, and `F11` switches between windowed and fullscreen modes.
 
-```powershell
-ctest --test-dir build-cmake --output-on-failure
+### Generic CMake workflow
+
+If GLFW and OpenGL are already discoverable by CMake:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
 ```
 
-For an uncapped, automatically terminating performance run, set
-`FARM_VSYNC=0` and `FARM_BENCHMARK_SECONDS` before launching. The first five
-seconds are treated as display-list warm-up; override that with
-`FARM_BENCHMARK_WARMUP` when needed. A machine-readable `BENCHMARK` line is
-printed on completion. `FARM_WINDOW_SMOKE_TEST=1` runs an automatic windowed,
-fullscreen, restored, and resized transition check and then exits.
+Run the resulting `Animated3DFarmScene` executable from the selected build directory. On Windows, ensure the directory containing the GLFW runtime DLL is on `PATH`.
 
-## Runtime architecture
+### Convenience scripts
 
-`Application` owns the GLFW window, fullscreen/V-sync state, timing, and frame
-order. `Camera` owns view input and frame-rate-independent movement. `Scene`
-owns gameplay objects, visibility/LOD decisions, and the single pausable
-animation clock. Object modules build their models from the shared OpenGL
-primitives. Static farms and vegetation use display lists, while distant trees
-and clouds use cheaper models and frustum/distance culling. Linear fog hides
-the LOD horizon and improves depth cues without changing nearby farm detail.
-`Village` owns reusable benches, seated/standing villagers, tea shops, and
-farm grass, while `Birds` owns sky-space flock and moon-crossing animation.
+The repository also includes direct compiler scripts:
 
-`test.cpp` is preserved as the original 2D reference implementation while the new application is developed under `src/` and `include/`.
+```powershell
+.\run_phase1.ps1
+```
+
+or from Git Bash/MSYS2:
+
+```bash
+./run_phase1.sh
+```
+
+Despite their historical `phase1` names, both scripts currently compile the complete source list and launch the current application. CMake is preferred for repeatable builds and test integration.
+
+## Controls
+
+### Camera and application
+
+| Input | Action |
+|---|---|
+| `W` / `S` | Move forward/backward along the camera's horizontal heading |
+| `A` / `D` | Turn left/right around the camera's current position |
+| `Q` / `E` | Move vertically up/down |
+| `Left Shift` | Sprint at 3x normal movement speed |
+| `Left Ctrl` | Precision movement at 0.3x normal speed |
+| Mouse movement | Look around while the cursor is captured |
+| Left click / `Tab` | Capture or release the mouse cursor |
+| Arrow Left/Right | Alternative keyboard yaw controls |
+| Arrow Up/Down | Look up/down |
+| `R` | Reset camera position and orientation |
+| `F11` | Toggle fullscreen/windowed mode |
+| `V` | Toggle VSync |
+| `Esc` | Release captured mouse; press again to exit |
+
+Normal camera movement is 20 world units per second, keyboard turning is 90 degrees per second, and pitch is clamped to prevent camera inversion. Movement remains on the ground plane even when looking up or down. `Q` and `E` provide explicit vertical movement.
+
+### World simulation
+
+| Input | Action |
+|---|---|
+| `N` | Toggle day/night target |
+| `P` | Pause/resume the shared scene-animation clock |
+| `T` | Pause/resume road traffic and roadside pedestrians |
+| `B` | Show/hide all five bonfire gatherings |
+| `L` | Toggle grid power/load shedding |
+| `O` | Pause/resume crop workers independently |
+| `[` / `]` | Decrease/increase crop-worker speed |
+| `+` / `-` | Increase/decrease windmill speed |
+
+Toggle controls use edge-triggered input, so holding a key does not repeatedly switch the state.
+
+### Vehicles and barns
+
+| Input | Action |
+|---|---|
+| `I` / `K` | Drive the manual tractor forward/reverse |
+| `J` / `;` | Steer the manual tractor left/right while driving |
+| `G` | Open/close all barn sliding doors |
+| `Z` / `X` | Roll the barn wheelbarrow toward the entrance/rear while held |
+| `C` | Open/close the barn storage chest |
+| `F` | Open/close the barn feeding gate |
+
+The current implementation shares barn interaction state across all four barn instances, so one barn-control key affects every matching barn mechanism.
+
+## Architecture
+
+The active runtime follows this ownership and frame flow:
+
+```text
+main
+  -> Application
+       |- GLFW window, context, timing, resize/fullscreen, VSync, benchmarks
+       |- Input state and edge detection
+       |- Camera movement, mouse look, projection, and view matrices
+       `- Scene
+            |- Animation clock and simulation state
+            |- Lighting and local-light selection
+            |- Terrain, road, farms, traffic, workers, barns, ponds, village
+            `- Reusable object and primitive modules
+```
+
+Each frame performs the following operations:
+
+1. Poll GLFW events and update held/pressed key state.
+2. Process application toggles such as fullscreen and VSync.
+3. Handle scene toggles and continuous object controls.
+4. Update the camera using bounded delta time.
+5. Resolve camera movement against barn walls and door openings.
+6. Update simulation, transitions, and object animation.
+7. Render the camera-centered sky without world translation.
+8. Apply the normal camera view and render the world.
+9. Swap buffers and update title-bar performance/state telemetry.
+
+### Main components
+
+| Component | Responsibility |
+|---|---|
+| `Application` | Window lifecycle, frame loop, framebuffer resizing, fullscreen, VSync, benchmarking, and smoke tests |
+| `Input` | Current and previous keyboard state, edge-triggered presses, and focus-loss clearing |
+| `Camera` | Heading-relative movement, yaw/pitch, mouse capture, view matrix, and perspective projection |
+| `Scene` | Active world ownership, simulation state, collision, culling, rendering order, and interaction routing |
+| `Animation` | Shared pausable animation time and windmill controls |
+| `Lighting` | Fixed-function global and directional light configuration |
+| `Primitives` | Shared cube, plane, cylinder, and sphere geometry |
+| `objects/*` | Reusable farm, vehicle, character, animal, structure, sky, pond, and village models |
+
+`farmworld.cpp`, standalone `Bridge.cpp`, `PowerPlant.cpp`, `Shadow.cpp`, and `TextureManager.cpp` remain compiled legacy/reference modules but are not instantiated by the active `Application -> Scene` rendering path. The bridge visible in the current scene is implemented inside `Pond.cpp` and uses a sampled sine arch for its railings.
+
+## Scene systems
+
+### Farms and vegetation
+
+The 12 farms use reusable geometry under root transforms rather than duplicated model code. A deterministic `FarmLayout` controls tree and animal counts, optional tractors and windmills, structure offsets, rotation, and startup chicken population. Crops, fences, paths, rocks, flowers, and grass are placed using local farm coordinates.
+
+The wider world uses deterministic vegetation generation with explicit clearance tests for roads, buildings, ponds, and bonfires. Large tree populations are partitioned into spatial chunks for culling and level-of-detail selection.
+
+### Traffic and characters
+
+Three road tractors move along a wrapped route from `z = -108` to `z = 108` at 5.5 world units per second. Initial placement and a 50-unit minimum spacing keep the convoy separated. Wheels rotate from traveled distance, and each tractor carries a seated driver built from the shared villager model.
+
+Four potential roadside pedestrians use active/wait intervals and spacing guards. Crop-worker populations are distributed across the farms with a maximum of three workers per farm. Their movement and working animations use delta time and independent speed controls.
+
+### Animals
+
+Cows use a detailed reusable low-polygon model with deterministic coat variants, articulated necks, horns, ears, muzzle, legs, hooves, udder, and tail. Position-derived animation phases prevent synchronized grazing. Chickens use lightweight walking, pecking, and wing/head motion suitable for repeated farm instances.
+
+### Barns
+
+Four barns contain an accessible shell and detailed interiors: stalls, troughs, hay bales, shelves, tools, a workbench, sacks, tack, ladder, loft, bucket, stool, milk can, wheelbarrow, storage chest, feeding gate, and lighting fixtures. Sliding doors are coupled to the barn collision test, while mechanical props remain usable during a power outage.
+
+### Ponds and bridge
+
+The scene includes one 36 x 26 main pond and two 32 x 23 secondary ponds. Water uses translucent layered geometry with time-varying color, circular ripples, shoreline banks, stones, reeds, lilies, and ducks. The active wooden bridge is part of `Pond.cpp`; its rail height follows a sine arch sampled into connected segments.
+
+### Day/night and electrical power
+
+`N` changes the target time of day, while the scene interpolates toward it over three seconds. Sky, fog, directional light, global ambient light, clouds, sun/moon visibility, stars, materials, terrain, and local lighting respond to the same normalized night amount.
+
+Grid power is an independent state. During load shedding:
+
+- Farmhouse, shop, barn, street, and substation electric lights fade out.
+- Windmills coast to a stop.
+- Moonlight, stars, bonfires, and vehicle headlights remain active.
+- Manual barn mechanisms and other non-electrical interactions remain usable.
+
+## Rendering and performance
+
+The renderer targets the OpenGL 2.1 compatibility profile and uses the matrix stack, fixed-function materials, fixed-function lights, fog, blending, and immediate-mode primitives. The approach emphasizes clarity and course-project portability rather than a modern shader pipeline.
+
+Implemented performance measures include:
+
+- Display-list caching for static ground, farms, vegetation, shop shells, drivers, clouds, barns, and substation geometry.
+- View-frustum culling using six normalized planes extracted from the combined projection/model-view matrix.
+- Distance culling for major repeated groups.
+- Spatial chunks for forest and grass rendering.
+- Simplified distant trees, drivers, and clouds.
+- Candidate ranking for local lights, respecting the OpenGL limit of `GL_LIGHT1` through `GL_LIGHT7` after the main directional light.
+- Squared-distance checks where an exact distance is unnecessary.
+- A 0.25-second delta-time cap to prevent large focus/loading spikes from destabilizing movement and animation.
+- VSync by default to reduce tearing and unnecessary CPU/GPU usage.
+
+The application title is updated once per second with FPS, frame time, window mode, VSync, time of day, grid power, traffic, bonfire, worker, barn-door, and worker-speed state.
+
+## Configuration
+
+Frequently adjusted values are centralized rather than scattered through drawing code.
+
+### `include/DayNightSettings.h`
+
+- Transition duration.
+- Day/night clear and fog colors.
+- Sky horizon, middle, and zenith colors.
+- Global ambient and directional light colors.
+- Sun and moon positions.
+- Cloud, lamp, and headlight colors.
+- Local-light activation threshold and the seven-light budget.
+
+### `include/VillageSimulationSettings.h`
+
+- Farm and worker counts.
+- Worker speed range and response.
+- Traffic count, route, speed, and minimum spacing.
+- Pedestrian population and activity timing.
+- Bench count and occupancy chance.
+- Power and windmill fade response.
+- Pond dimensions.
+- Bonfire count, positions, clearance radius, and draw distance.
+
+## Testing and benchmarking
+
+### Automated camera tests
+
+The CTest target checks forward movement at 0, 90, 180, and -90 degree headings; opposing-key cancellation; four-turn yaw wrapping without translation; immediate stopping after key release; combined `W+A` movement; and synchronization between mouse yaw and keyboard movement.
+
+```powershell
+cmake --build build-cmake --config Release
+ctest --test-dir build-cmake -C Release --output-on-failure
+```
+
+With a single-config MinGW generator, `-C Release` is optional.
+
+### Automated fullscreen/resizing smoke test
+
+This mode opens the application, transitions to fullscreen, restores the previous window, resizes to 1000 x 600, prints each state, and exits:
+
+```powershell
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+$env:FARM_WINDOW_SMOKE_TEST = "1"
+.\build-cmake\Animated3DFarmScene.exe
+```
+
+### Timed performance benchmark
+
+The benchmark waits for an optional warm-up period, measures a fixed interval, prints a machine-readable `BENCHMARK` line, and exits automatically:
+
+```powershell
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+$env:FARM_VSYNC = "0"
+$env:FARM_BENCHMARK_WARMUP = "5"
+$env:FARM_BENCHMARK_SECONDS = "10"
+.\build-cmake\Animated3DFarmScene.exe
+```
+
+The output includes frame count, elapsed time, FPS, milliseconds per frame, camera pose, night amount, power state, traffic state, bonfire state, minimum traffic gap, crop-worker count, pause state, and worker speed. Performance results are hardware-, driver-, resolution-, camera-, and scene-state-dependent; compare runs using the same conditions.
+
+### Runtime environment variables
+
+| Variable | Meaning |
+|---|---|
+| `FARM_VSYNC=0` | Start with VSync disabled; any other or unset value enables it |
+| `FARM_BENCHMARK_SECONDS=<n>` | Measure for `n` seconds and exit |
+| `FARM_BENCHMARK_WARMUP=<n>` | Override the default five-second benchmark warm-up |
+| `FARM_WINDOW_SMOKE_TEST=1` | Run the automatic fullscreen/restore/resize test and exit |
+
+## Project structure
+
+```text
+3D_Farm_OpenGl/
+|- CMakeLists.txt                 CMake targets and test registration
+|- README.md                      Project guide
+|- LICENSE                        MIT license
+|- run_phase1.ps1                 Direct Windows/MSYS2 build-and-run script
+|- run_phase1.sh                  Direct Git Bash/MSYS2 build-and-run script
+|- include/
+|  |- Application.h              Application/window ownership
+|  |- Camera.h                    Camera state and transformations
+|  |- Input.h                     Keyboard state tracking
+|  |- Scene.h                     Active world and simulation ownership
+|  |- Animation.h                 Shared animation clock
+|  |- Lighting.h                  Fixed-function lighting interface
+|  |- DayNightSettings.h          Day/night tuning constants
+|  |- VillageSimulationSettings.h Population and environment tuning
+|  |- graphics/                   Primitive and legacy graphics helpers
+|  `- objects/                    Object-module interfaces
+|- src/
+|  |- main.cpp                    Program entry point
+|  |- Application.cpp            Main loop, window modes, telemetry, tests
+|  |- Camera.cpp                 Heading, movement, view, and projection
+|  |- Input.cpp                  Held/pressed input implementation
+|  |- Scene.cpp                  Layout, update, culling, collision, rendering
+|  |- Animation.cpp              Shared time and windmill animation
+|  |- Lighting.cpp               Material-aware fixed-function lighting
+|  |- graphics/                  Primitive and legacy graphics implementations
+|  `- objects/                   Farms, animals, vehicles, village, sky, etc.
+|- tests/
+|  `- CameraControlTests.cpp      Deterministic camera/input tests
+|- Screenshots/                  README imagery
+`- Documents/                    Project report and supporting documentation
+```
+
+`test.cpp` is the preserved original 2D reference program. The maintained 3D application starts at `src/main.cpp`.
+
+## Known limitations
+
+- Rendering uses legacy immediate mode and display lists rather than VBOs, VAOs, instancing, and programmable shaders.
+- There is no active texture pipeline, general shadow-map system, reflection/refraction pass, skeletal animation, or physics engine.
+- Camera collision currently applies to barns; most fences, trees, vehicles, shops, ponds, and substation geometry are non-solid.
+- All barn instances share one set of door and prop interaction states.
+- Transparent effects are state-managed but are not globally depth-sorted from back to front.
+- Startup randomization changes some chicken, worker, and seating populations between launches, although they remain stable during one run.
+- Several compiled legacy/reference modules are outside the active scene path and should be consolidated or removed in a future cleanup.
+- File naming is not fully case-consistent (`farmworld.cpp`/`FarmWorld` and lowercase object source names), which can require attention on case-sensitive platforms.
+
+The most valuable future rendering upgrade would be a buffered shader pipeline with instancing for repeated vegetation and farm geometry. Broader collision, per-barn state, transparent-object sorting, and additional scene-state tests are also natural next steps.
+
+## Troubleshooting
+
+### CMake cannot find GLFW
+
+Pass the UCRT64 prefix explicitly:
+
+```powershell
+-DCMAKE_PREFIX_PATH=C:/msys64/ucrt64
+```
+
+Confirm that `C:\msys64\ucrt64\lib\cmake\glfw3` and the GLFW headers/libraries exist.
+
+### The executable cannot find a DLL
+
+Add the UCRT64 runtime directory before launching:
+
+```powershell
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+```
+
+### Movement continues after switching windows
+
+The application clears held input and releases mouse capture on focus loss. If the operating system intercepts a key before GLFW receives the focus event, click the window again and press/release the affected key. Reproduce with the CTest target if the behavior persists.
+
+### Performance is unexpectedly low
+
+- Build in `Release` mode.
+- Compare the same camera position and scene state.
+- Disable VSync only for measurement, not normal play.
+- Allow the five-second display-list warm-up before recording results.
+- Check the title bar for the current window mode, VSync state, and frame time.
+
+### The scene is too dark
+
+Check the title bar for `Night` and `POWER OUT`. Press `N` to return to day or `L` to restore grid power. Moonlight and headlights intentionally remain dimmer than daytime illumination.
+
+## Documentation
+
+- [Final 20-page project report](Documents/3D_Farm_OpenGL_Project_Report_Final_20_Pages.pdf)
+- [Editable report source](Documents/3D_Farm_OpenGL_Project_Report_20_Pages.html)
+- [Report verification record](Documents/3D_Farm_OpenGL_Project_Report_Verification.txt)
+
+The report contains the full architecture discussion, object-specific implementation notes, mathematical foundations, runtime screenshots, performance measurements, test evidence, and known limitations.
+
+## License
+
+This project is available under the [MIT License](LICENSE).
